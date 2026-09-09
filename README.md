@@ -2,6 +2,9 @@
 
 React Native + Expo translation of the Q&Facio owner mockup. The current app is a frontend prototype: its sample data and edits live in memory and reset when the app reloads.
 
+## Read docs
+Make sure to read the Markdown files inside docs to understand the context of the project requirements and architecture. Feel free to change the contents if an error is found.
+
 ## Run with Expo Go
 
 1. Install the current Expo Go app on the phone.
