@@ -1,0 +1,30 @@
+{
+  "expo": {
+    "name": "Q&Facio Kitchen Operations",
+    "slug": "q-facio-kitchen-operations",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "qfacio",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "android": {
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "output": "static"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#FCF9F2"
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}
