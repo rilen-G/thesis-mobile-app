@@ -60,6 +60,15 @@ The user controls commits and pushes in this repository. AI tools must wait for 
 
 ## Decision Record Template
 
+### Order and Access Decisions — 2026-09-11
+
+- User-approved implementation rules (revised 2026-09-14): same-day pickup in Asia/Manila; owner-configured opening/cutoff times; new orders start Confirmed; staff acceptance reserves quantity; cancellations are recorded as Rejected; eligible rejection after acceptance restores quantity exactly once; unclaimed orders remain Ready and are not counted as collected or completed. The complete persisted status set is Confirmed, Accepted, Ready, Completed, Rejected, and Expired.
+- Daily allocation means sellable quantity rather than a promotion-only cap. Keep historical business dates.
+- Staff have order operations and necessary customer access; owners manage menu, settings, team membership, and owner reporting.
+- These decisions are reflected in the Phase 1–2 implementation and [backend setup guide](14-backend-setup.md). Adviser approval of revised thesis objectives and live Meta feasibility is still pending.
+
+### Template
+
 For each resolved question, record:
 
 - decision;

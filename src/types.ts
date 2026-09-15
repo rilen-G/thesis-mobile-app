@@ -1,13 +1,11 @@
 import type { ImageSourcePropType } from 'react-native';
 
 export type OrderStatus =
-  | 'Customer-Confirmed / Awaiting Staff Acceptance'
+  | 'Confirmed'
   | 'Rejected'
   | 'Accepted'
-  | 'Preparing'
   | 'Ready'
   | 'Completed'
-  | 'Cancelled'
   | 'Expired';
 
 export type ChatClassification =

@@ -38,26 +38,22 @@ At minimum, a sellable product needs a name, price, active state, and availabili
 
 Never recompute old order totals from a product price that may have changed.
 
-## Recommended Order Status Flow
+## Implemented Phase 2 Order Status Flow
 
 ~~~text
-draft
-  -> awaiting_customer_confirmation
-  -> confirmed
-  -> preparing
-  -> ready
-  -> completed
-
-awaiting_customer_confirmation -> abandoned or cancelled
-confirmed or preparing -> rejected or cancelled, subject to business rules
-ready -> unclaimed or completed
+confirmed -> accepted -> ready -> completed
+confirmed -> rejected
+confirmed -> expired
+accepted -> rejected
 ~~~
 
 Use one controlled transition service or database function. Do not allow arbitrary status strings or direct client updates.
 
-## Confirmation Transaction
+The only persisted order statuses are Confirmed, Accepted, Ready, Completed, Rejected, and Expired. New orders begin as Confirmed and wait for a staff user to accept them. Cancellation outcomes are recorded as Rejected. There is no separate Draft, Preparing, Cancelled, or Unclaimed order status. An unclaimed order remains Ready and is excluded from collected/completed sales. Same-day pickup in Asia/Manila remains the implemented fulfillment rule. The owner records opening/cutoff times in Settings. See [Backend Setup](14-backend-setup.md) for deployed-schema prerequisites, exact rules, and acceptance checks. AI/chat states remain future work.
 
-Order confirmation must be atomic:
+## Acceptance Transaction
+
+Staff acceptance must be atomic:
 
 1. Lock or otherwise protect the relevant allocation record.
 2. Re-read available quantity.
@@ -71,15 +67,15 @@ The database result is authoritative even if an AI message previously suggested 
 
 ## Allocation Rules
 
-- Draft and incomplete conversations do not consume allocation.
-- A successfully confirmed order consumes allocation once.
-- A retried confirmation must not consume it twice.
-- Rejection or eligible cancellation restores allocation once.
-- Completed and unclaimed outcomes do not silently restore inventory.
+- Confirmed orders awaiting staff acceptance do not consume allocation.
+- A successfully accepted order consumes allocation once.
+- A retried acceptance must not consume it twice.
+- Rejection of an accepted order restores allocation once when the saved business policy enables restoration.
+- Rejected confirmed orders never consumed allocation. Completed orders and unclaimed Ready orders do not silently restore inventory.
 - Manual adjustments require a reason and audit entry.
 - The system may alert the owner when a limit is near, but the owner makes the final promotion cutoff decision.
 
-The group must define whether allocation represents physical inventory, a promotion-only sales cap, or both. If both are required, model them separately.
+Allocation was defined as daily sellable quantity. Each product/business date stores total and used quantity; remaining equals total minus used. Prior dates are retained, and the owner initializes each day's quantity with an audited adjustment. This is not a separate promotion sales cap.
 
 ## Idempotency
 

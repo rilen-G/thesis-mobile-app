@@ -5,7 +5,7 @@ const requiredDetails = ['Menu item', 'Quantity', 'Order type'];
 export const initialOrders: Order[] = [
   {
     id: 'ORD-902', customer: 'Juan Dela Cruz', elapsed: '2 mins ago',
-    status: 'Customer-Confirmed / Awaiting Staff Acceptance', fulfillment: 'Pickup', aiPaused: false,
+    status: 'Confirmed', fulfillment: 'Pickup', aiPaused: false,
     confirmation: 'Customer-confirmed', chatClassification: 'Customer-Confirmed Order',
     followUp: 'No follow-up needed while staff acceptance is pending.', paymentMethod: 'GCash',
     preferredTime: 'Today, 12:30 PM', specialRequest: 'Extra sabaw.',
@@ -25,7 +25,7 @@ export const initialOrders: Order[] = [
   },
   {
     id: 'ORD-903', customer: 'Maria Santos', elapsed: '10 mins ago',
-    status: 'Customer-Confirmed / Awaiting Staff Acceptance', fulfillment: 'Pickup', aiPaused: true,
+    status: 'Confirmed', fulfillment: 'Pickup', aiPaused: true,
     confirmation: 'Customer-confirmed', chatClassification: 'Customer-Confirmed Order',
     followUp: 'AI paused for manual correction. Follow-ups and summaries are stopped.', paymentMethod: 'Cash',
     preferredTime: 'Today, 1:00 PM', allocationIssue: 'Leche Flan Cup is currently paused for Messenger orders.',
@@ -39,15 +39,15 @@ export const initialOrders: Order[] = [
     total: '₱125.00', items: [{ qty: '1x', name: 'Leche Flan Cup', price: '₱125.00', allocation: 'Paused for chat orders' }],
   },
   {
-    id: 'ORD-905', customer: 'Liza Ramos', elapsed: '25 mins ago', status: 'Cancelled', fulfillment: 'Pickup', aiPaused: false,
+    id: 'ORD-905', customer: 'Liza Ramos', elapsed: '25 mins ago', status: 'Rejected', fulfillment: 'Pickup', aiPaused: false,
     confirmation: 'Awaiting customer confirmation', chatClassification: 'Incomplete Order',
     followUp: 'No follow-up needed because the customer clearly cancelled before confirming the order.',
     paymentMethod: 'Not collected', preferredTime: 'Today, 2:00 PM',
-    cancellationRequest: 'Customer clearly cancelled before order confirmation, so the AI marked the conversation Cancelled and informed staff.',
+    cancellationRequest: 'Customer clearly cancelled before order confirmation, so the AI marked the order Rejected and informed staff.',
     requiredDetails, actionState: 'No allocation was deducted. Staff is only informed.', privacyNoticeShown: true,
     conversation: [
       { sender: 'Customer', text: 'Cancel ko na po muna yung order.', time: '11:06 AM' },
-      { sender: 'AI', text: 'Conversation marked Cancelled before confirmation. No allocation deducted.', time: '11:06 AM' },
+      { sender: 'AI', text: 'Order marked Rejected before acceptance. No allocation deducted.', time: '11:06 AM' },
     ],
     total: '₱95.00', items: [{ qty: '1x', name: 'Chicken Pastil', price: '₱95.00', allocation: '45 left' }],
   },

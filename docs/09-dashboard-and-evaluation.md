@@ -23,7 +23,7 @@ Store these definitions with the research protocol so dashboard values can be re
 - Conversations supported by the ordering flow.
 - Customer-confirmed orders.
 - Staff-accepted and completed orders.
-- Rejected and unclaimed orders.
+- Rejected and Expired orders, plus Ready orders that remain unclaimed and therefore are not counted as completed sales.
 - Completed food sales originating from Messenger.
 - Promotion reach or views available through Meta.
 - Promotion-attributed chats under the approved rule.

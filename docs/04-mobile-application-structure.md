@@ -73,6 +73,17 @@ Create or consolidate these before duplicating them across screens:
 - confirmation dialogs and bottom sheets;
 - image and media placeholders.
 
+## Mockup Visual Parity
+
+The React frontend under the sibling `mockup/` directory is the visual source of truth for the mobile UI. The Expo implementation mirrors its warm cream surface, Hanken Grotesk type hierarchy, terracotta actions, white eight-pixel cards, compact status badges, horizontal filter chips, fixed six-item bottom navigation, and dense 390-pixel reference layout. Native controls and Expo Router replace browser-only behavior, while backend loading, error, retry, empty, and permission states remain functional.
+
+When changing a screen, compare it with the corresponding mockup screen and preserve these mappings:
+
+- `AppHeader` and `BottomNav` map to `AppScreen` and the owner tabs layout.
+- Dashboard, Orders, Customers, Menu, Promos, Activity, Settings, detail screens, and KPI Analytics retain the mockup hierarchy and spacing.
+- The only order filter/status labels are Confirmed, Accepted, Ready, Completed, Rejected, and Expired; `All` is a view filter, not a status.
+- Features that are not connected yet may show the mockup review surface, but controls that would publish, message, or report unavailable external metrics stay disabled and must not present sample values as live data.
+
 ## Forms
 
 - Show field requirements before submission.

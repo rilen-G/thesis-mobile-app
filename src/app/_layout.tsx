@@ -9,7 +9,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 
-import { AppDataProvider } from '@/state/app-data';
+import { AuthProvider } from '@/state/auth';
 import { colors } from '@/theme/tokens';
 
 void SplashScreen.preventAutoHideAsync();
@@ -21,9 +21,9 @@ export default function RootLayout() {
   if (!loaded && !error) return null;
 
   return (
-    <AppDataProvider>
+    <AuthProvider>
       <StatusBar style="dark" />
       <Stack screenOptions={{ contentStyle: { backgroundColor: colors.cream }, headerShown: false }} />
-    </AppDataProvider>
+    </AuthProvider>
   );
 }

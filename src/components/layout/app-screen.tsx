@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import { ArrowLeft, Settings } from 'lucide-react-native';
 import type { ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View, type ScrollViewProps } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View, type ScrollViewProps } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { colors, fonts, spacing } from '@/theme/tokens';
@@ -31,18 +31,21 @@ export function AppScreen({ children, title = 'Partner Business', detail, backLa
           </Pressable>
         ) : detail ? <View style={styles.iconButton} /> : null}
       </View>
-      <ScrollView contentContainerStyle={[styles.content, contentContainerStyle]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <ScrollView contentContainerStyle={[styles.content, detail && styles.detailContent, contentContainerStyle]} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" showsVerticalScrollIndicator={false}>
         {children}
       </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: { backgroundColor: colors.cream, flex: 1 },
-  header: { alignItems: 'center', backgroundColor: colors.surface, borderBottomColor: colors.line, borderBottomWidth: 1, flexDirection: 'row', gap: spacing.md, minHeight: 60, paddingHorizontal: spacing.lg },
+  safeArea: { alignSelf: 'center', backgroundColor: colors.cream, flex: 1, maxWidth: 430, width: '100%' },
+  header: { alignItems: 'center', backgroundColor: colors.surface, borderBottomColor: colors.line, borderBottomWidth: 1, flexDirection: 'row', gap: spacing.md, minHeight: 69, paddingHorizontal: spacing.lg, paddingVertical: 12 },
   iconButton: { alignItems: 'center', height: 40, justifyContent: 'center', width: 40 },
   title: { color: colors.terracotta, flex: 1, fontFamily: fonts.extraBold, fontSize: 21, lineHeight: 28 },
-  detailTitle: { color: colors.terracotta, fontSize: 18, textAlign: 'center' },
-  content: { gap: spacing.md, padding: spacing.lg, paddingBottom: spacing.xxxl },
+  detailTitle: { color: colors.terracotta, fontSize: 21, textAlign: 'left' },
+  content: { gap: spacing.md, padding: spacing.lg, paddingBottom: spacing.xxl },
+  detailContent: { paddingBottom: spacing.xxxl },
 });

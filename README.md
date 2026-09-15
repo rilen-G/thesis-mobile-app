@@ -1,6 +1,10 @@
 # App Natin
 
-React Native + Expo translation of the Q&Facio owner mockup. The current app is a frontend prototype: its sample data and edits live in memory and reset when the app reloads.
+React Native + Expo application for Q&Facio kitchen operations. Phases 1–2 now have Supabase-backed authentication, business membership, private menu photos, customers, settings, and manual orders with atomic daily allocation. Configure a dedicated development backend before use; the app does not fall back to sample records.
+
+The native UI follows the sibling `mockup/` frontend as its visual source of truth while retaining the Supabase-backed behavior and native loading/error states.
+
+Follow [Backend Setup and Phase 1–2 Validation](docs/14-backend-setup.md) for migrations, account recovery, roles, and the remaining hosted/device acceptance checks. Meta, AI, promotions, and research analytics are explicitly unavailable in this release.
 
 ## Read docs
 Make sure to read the Markdown files inside docs to understand the context of the project requirements and architecture. Feel free to change the contents if an error is found.
@@ -44,13 +48,24 @@ npx eas-cli build --platform android --profile preview
 
 Use the `production` profile for store-ready Android output. iOS builds use the same project but produce an iOS build rather than an APK.
 
-## Implemented frontend
+## Implemented workflows
 
-- Sign-in and sign-up mode
-- Owner dashboard and KPI analytics
-- Orders, filters, status actions, and editable order details
-- Customer search, segments, profiles, and purchase history
-- Menu search, item creation/editing, availability, and allocation controls
-- Promotion schedule, drafts, details, edit states, and approval/retry actions
-- Activity timeline
-- Settings and default post format
+- Registration, email verification, sign-in, session restoration, recovery, and sign-out.
+- Business creation and owner-managed staff membership.
+- Menu editing, private gallery photo upload, availability, and daily quantity adjustments.
+- Customer creation/editing/archiving and order history.
+- Manual confirmed orders, immutable price snapshots, the six-status order lifecycle, and exactly-once quantity reservation/restoration on staff acceptance and eligible rejection.
+- Owner activity history, business hours, approved order rules, and saved post-format preference.
+- Durable recovery of uncertain saves with an explicit retry; no automatic offline sending.
+
+## Automated checks
+
+```powershell
+npm run typecheck
+npm run lint
+npm test
+npm run test:postgres
+npm run doctor
+```
+
+The PostgreSQL suite starts an isolated localhost database under `.test-artifacts` and never uses a hosted project. See the setup guide for test limitations and browser/device checks.

@@ -13,10 +13,11 @@ This directory is the working implementation guide for the mobile repository. It
 7. [Gemini and RAG](07-gemini-and-rag.md)
 8. [Promotions, Templates, and Follow-ups](08-promotions-templates-and-followups.md)
 9. [Dashboard and Evaluation](09-dashboard-and-evaluation.md)
-10. [Implementation Roadmap](10-implementation-roadmap.md)
+10. [Post-Frontend Implementation Roadmap](10-implementation-roadmap.md) — phases, acceptance gates, and deferred Meta integration.
 11. [Testing and Definition of Done](11-testing-and-definition-of-done.md)
 12. [Team, Risks, and Decisions](12-team-risks-and-decisions.md)
 13. [Reference Links](13-reference-links.md)
+14. [Backend Setup and Phase 1–2 Validation](14-backend-setup.md)
 
 ## Quick Routing
 
@@ -25,6 +26,7 @@ This directory is the working implementation guide for the mobile repository. It
 | Feature scope or thesis alignment | 01 and 09 |
 | Web mockup migration or folder layout | 02 and 04 |
 | Authentication, secrets, RLS, or deployment | 03 |
+| Running the Phase 1–2 backend and acceptance checks | 14 |
 | Products, orders, stock, or promotion limits | 05 |
 | Facebook Page connection or customer messages | 06 |
 | AI replies, content generation, or knowledge retrieval | 07 |
@@ -53,6 +55,7 @@ The former REACT_NATIVE_EXPO_REPOSITORY_HANDOFF.md contained 27 numbered section
 
 ## Documentation Status
 
+- The revised roadmap in document 10 moves live Meta integration off the critical path pending professor consultation. Older subsystem documents describe intended live integration, not a prerequisite for the test chat or manual promotional export.
 - The mobile repository is the only Git repository needed for implementation tracking.
 - The user must explicitly authorize every commit and push.
 - These files are planning documents, not proof that a feature is already implemented.

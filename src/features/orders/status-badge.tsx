@@ -1,25 +1,23 @@
 import { StyleSheet, Text, View } from 'react-native';
 
 import { colors, fonts, radii, spacing } from '@/theme/tokens';
-import type { OrderStatus } from '@/types';
+import type { Status } from '@/features/operations/domain';
 
-const tones: Record<OrderStatus, { backgroundColor: string; color: string }> = {
-  'Customer-Confirmed / Awaiting Staff Acceptance': { backgroundColor: colors.tertiarySoft, color: colors.tertiary },
-  Rejected: { backgroundColor: colors.neutralSoft, color: colors.muted },
-  Accepted: { backgroundColor: colors.terracottaSoft, color: colors.terracotta },
-  Preparing: { backgroundColor: '#FFF2DF', color: colors.preparing },
-  Ready: { backgroundColor: colors.readySoft, color: colors.ready },
-  Completed: { backgroundColor: colors.readySoft, color: colors.ready },
-  Cancelled: { backgroundColor: colors.neutralSoft, color: colors.muted },
-  Expired: { backgroundColor: colors.neutralSoft, color: colors.muted },
+const tones: Record<Status, { backgroundColor: string; borderColor: string; color: string }> = {
+  confirmed: { backgroundColor: colors.tertiarySoft, borderColor: '#C5DFE9', color: colors.tertiary },
+  rejected: { backgroundColor: colors.neutralSoft, borderColor: colors.line, color: colors.muted },
+  accepted: { backgroundColor: colors.terracottaSoft, borderColor: '#EFB8AE', color: colors.terracotta },
+  ready: { backgroundColor: colors.readySoft, borderColor: '#C6E1D7', color: colors.ready },
+  completed: { backgroundColor: colors.readySoft, borderColor: '#C6E1D7', color: colors.ready },
+  expired: { backgroundColor: colors.neutralSoft, borderColor: colors.line, color: colors.muted },
 };
 
-export function StatusBadge({ status, label }: { status: OrderStatus; label?: string }) {
+export function StatusBadge({ status, label }: { status: Status; label?: string }) {
   const tone = tones[status];
-  return <View style={[styles.badge, { backgroundColor: tone.backgroundColor }]}><Text numberOfLines={1} style={[styles.text, { color: tone.color }]}>{label ?? status}</Text></View>;
+  return <View style={[styles.badge, { backgroundColor: tone.backgroundColor, borderColor: tone.borderColor }]}><Text numberOfLines={1} style={[styles.text, { color: tone.color }]}>{label ?? status}</Text></View>;
 }
 
 const styles = StyleSheet.create({
-  badge: { alignItems: 'center', borderRadius: radii.pill, justifyContent: 'center', minHeight: 28, paddingHorizontal: spacing.md, paddingVertical: spacing.xs },
+  badge: { alignItems: 'center', borderRadius: radii.pill, borderWidth: 1, justifyContent: 'center', minHeight: 28, paddingHorizontal: 10, paddingVertical: spacing.xs },
   text: { fontFamily: fonts.extraBold, fontSize: 11, lineHeight: 14 },
 });

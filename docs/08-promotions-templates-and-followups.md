@@ -90,7 +90,7 @@ A follow-up job should:
 1. confirm the conversation still qualifies;
 2. confirm messaging is allowed by current Meta policy;
 3. confirm the customer or staff has not replied;
-4. confirm the order is not completed, cancelled, rejected, or opted out;
+4. confirm the order is not completed, rejected, expired, or opted out;
 5. confirm the follow-up count is below the limit;
 6. send using an idempotency key;
 7. record the attempt and result;
