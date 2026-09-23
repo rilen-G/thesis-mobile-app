@@ -1,16 +1,8 @@
-# Q&Facio mobile
+# App Name
 
 Android-first Expo / React Native application for the thesis **Development of AI-Agentic Digital Marketing and Chat-Based App for Philippine Micro and Small Foodservice Establishments**.
 
 The app supports Supabase authentication, business membership, menu and private photos, customers, manual orders, daily quantities, owner-managed approved knowledge, and a disabled-by-default live Messenger integration through Zapier. Gemini runs on the backend. Messenger requires backend deployment, Zap configuration, and Page verification; see [Messenger setup](docs/MESSENGER.md). Automated publishing, promotional export, and timed follow-ups remain planned work.
-
-## Start here
-
-1. Run `npm install` from this directory.
-2. Configure `.env` and your backend using [Setup](docs/SETUP.md).
-3. Run `npm start`, then scan the QR code with Expo Go on the same Wi-Fi network.
-
-Use `npm run web` for a browser preview. If LAN discovery fails, use `npx expo start --go --tunnel`; use `--clear` for a stale Metro cache. Native libraries outside Expo Go require `npm run start:dev-client` and a development build.
 
 ## Documentation
 
