@@ -15,6 +15,11 @@ export function OperationsProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<PendingOperation | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(null), 4000);
+    return () => clearTimeout(timer);
+  }, [notice]);
   const refreshPending = useCallback(async () => {
     if (userId) try { setPending(await readPending(userId)); } catch (failure) { setError(errorText(failure)); }
   }, [userId]);

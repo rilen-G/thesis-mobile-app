@@ -1,12 +1,12 @@
 import { Tabs } from 'expo-router';
-import { Grid3X3, History, Megaphone, ReceiptText, UsersRound, Utensils } from 'lucide-react-native';
+import { Home, History, Megaphone, ReceiptText, UsersRound, Utensils } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StyleSheet, View } from 'react-native';
 
 import { colors, fonts } from '@/theme/tokens';
 import { useOperations } from '@/state/operations';
 
-const icons = { dashboard: Grid3X3, orders: ReceiptText, customers: UsersRound, menu: Utensils, promos: Megaphone, activity: History };
+const icons = { dashboard: Home, orders: ReceiptText, customers: UsersRound, menu: Utensils, promos: Megaphone, activity: History };
 
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
@@ -14,16 +14,20 @@ export default function TabsLayout() {
   const staff = data?.role === 'staff';
   return (
     <Tabs screenOptions={({ route }) => {
-      const Icon = icons[route.name as keyof typeof icons] ?? Grid3X3;
+      const Icon = icons[route.name as keyof typeof icons] ?? Home;
       return {
         headerShown: false,
-        tabBarActiveTintColor: colors.ink,
+        tabBarActiveTintColor: colors.terracotta,
         tabBarInactiveTintColor: colors.muted,
-        tabBarIcon: ({ color, focused }) => <View style={[styles.iconWell, focused && styles.activeIconWell]}><Icon color={color} size={19} strokeWidth={focused ? 2.7 : 2.2} /></View>,
+        tabBarIcon: ({ color, focused }) => (
+          <View style={[styles.iconWell, focused && styles.activeIconWell]}>
+            <Icon color={color} size={19} strokeWidth={focused ? 2.7 : 2.2} />
+          </View>
+        ),
         tabBarIconStyle: styles.iconSlot,
         tabBarItemStyle: { paddingTop: 0 },
         tabBarLabelPosition: 'below-icon',
-        tabBarLabelStyle: { fontFamily: fonts.bold, fontSize: 10 },
+        tabBarLabelStyle: { fontFamily: fonts.bold, fontSize: 11 },
         tabBarStyle: [styles.tabBar, { height: 84 + insets.bottom, paddingBottom: 12 + insets.bottom }],
       };
     }}>
@@ -41,5 +45,5 @@ const styles = StyleSheet.create({
   tabBar: { alignSelf: 'center', width: '100%', maxWidth: 430, backgroundColor: colors.card, borderTopColor: colors.line, paddingTop: 8 },
   iconSlot: { height: 40, width: 40 },
   iconWell: { alignItems: 'center', borderRadius: 12, height: 40, justifyContent: 'center', width: 40 },
-  activeIconWell: { backgroundColor: colors.amber },
+  activeIconWell: { backgroundColor: colors.terracottaSoft },
 });

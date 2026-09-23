@@ -16,6 +16,10 @@ grant usage on schema auth to authenticated; grant execute on function auth.uid(
 create schema storage; create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);
 create table storage.objects(id uuid primary key default gen_random_uuid(),bucket_id text,name text);
 alter table storage.objects enable row level security; grant usage on schema storage to authenticated; grant select,insert on storage.objects to authenticated;`);
+// Fresh hosted projects may give client roles broad default privileges. The
+// baseline must explicitly narrow these, not rely on a pristine PostgreSQL ACL.
+await db.exec(`alter default privileges in schema public grant all on tables to anon, authenticated;
+alter default privileges in schema public grant execute on functions to anon, authenticated;`);
 for(const file of (await readdir('supabase/migrations')).filter(file=>file.endsWith('.sql')).sort()) await db.exec(await readFile(`supabase/migrations/${file}`,'utf8'));
 for(const [id,email] of [[owner,'owner@test.invalid'],[staff,'staff@test.invalid'],[stranger,'stranger@test.invalid'],[otherOwner,'other@test.invalid']]) await db.query('insert into auth.users values($1,$2,now())',[id,email]);
 async function as(user,fn){return db.transaction(async(tx)=>{await tx.exec('set local role authenticated');await tx.query("select set_config('request.jwt.claim.sub',$1,true)",[user]);return fn(tx);});}
@@ -33,6 +37,42 @@ await t.test('owner/staff bootstrap and business isolation',async()=>{
  await assert.rejects(cmd(otherOwner,b('save_customer',{id:randomUUID(),version:0,name:'Leak'})),/permission_denied/);
  await assert.rejects(as(staff,tx=>tx.exec("update public.business_members set role='owner'")),/permission denied/);
  await assert.rejects(as(staff,tx=>tx.exec("insert into public.products(id,business_id,name,price_centavos) values(gen_random_uuid(),gen_random_uuid(),'bypass',1)")),/permission denied/);
+});
+await t.test('menu categories persist, validate, isolate, and replay safely',async()=>{
+ const id=randomUUID();
+ const save=(more={})=>b('save_product',{id,version:0,name:'Category item',price_centavos:100,active:true,...more});
+ const request_id=randomUUID();
+ await cmd(owner,save({category:'Rice Meals',request_id}));
+ assert.equal((await snap(staff)).products.find(p=>p.id===id).category,'Rice Meals');
+ await assert.rejects(cmd(staff,save({version:1,category:'Drinks'})),/permission_denied/);
+ await assert.rejects(cmd(otherOwner,save({version:1,category:'Drinks'})),/permission_denied/);
+ await assert.rejects(cmd(owner,save({version:1,category:'All'})),/Invalid menu category/);
+ await assert.rejects(cmd(owner,save({version:1,category:12})),/Invalid menu category/);
+ assert.equal((await snap(owner)).products.find(p=>p.id===id).version,1);
+ await cmd(owner,save({version:1,category:'Drinks'}));
+ await cmd(owner,save({category:'Rice Meals',request_id}));
+ assert.equal((await snap(owner)).products.find(p=>p.id===id).category,'Drinks');
+ await assert.rejects(cmd(owner,save({category:'Desserts',request_id})),/request_conflict/);
+ await cmd(owner,save({version:2}));
+ assert.equal((await snap(owner)).products.find(p=>p.id===id).category,'Drinks');
+ await cmd(owner,save({version:3,category:null}));
+ assert.equal((await snap(owner)).products.find(p=>p.id===id).category,null);
+ await assert.rejects(cmd(owner,save({version:3,category:'Sizzling'})),/conflict/);
+ for(const invalid of ['', '   ', 'all', 'Uncategorized', 'x'.repeat(41), 'Bad\nCategory',true,{},[]])await assert.rejects(cmd(owner,save({version:4,category:invalid})),/Invalid menu category/);
+ await cmd(owner,save({version:4,category:'  Coffee  '}));
+ assert.equal((await snap(owner)).products.find(p=>p.id===id).category,'Coffee');
+ await cmd(owner,save({version:5,category:'coffee'}));
+ assert.equal((await snap(owner)).products.find(p=>p.id===id).category,'Coffee');
+ assert.equal((await snap(otherOwner)).products.length,0);
+ // The command service permits server-generated IDs; categories must follow its returned ID.
+ const generatedPayload=save({id:undefined,category:'Drinks',request_id:randomUUID()});
+ const generated=await cmd(owner,generatedPayload);
+ assert.equal((await snap(owner)).products.find(p=>p.id===generated.id).category,'Drinks');
+ assert.deepEqual(await cmd(owner,generatedPayload),generated);
+ assert.equal((await snap(owner)).products.filter(p=>p.id===generated.id).length,1);
+ await db.query('delete from public.products where id=$1',[generated.id]);
+ // Keep the rest of the suite's original product assumptions intact.
+ await db.query('delete from public.products where id=$1',[id]);
 });
 await t.test('persistent customer/menu and stale updates',async()=>{
  await cmd(staff,b('save_customer',{id:customer,version:0,name:'Customer',phone:'09123456789',notes:'Pickup'}));
@@ -92,9 +132,16 @@ await t.test('rejection after acceptance restores once and requires a reason',as
  assert.equal((await snap(owner)).allocations[0].used,0);await assert.rejects(transition(first,'accepted',3),/invalid_transition/);
 });
 await t.test('prices are immutable and ready orders cannot be rejected',async()=>{
- const id=await createOrder();await cmd(owner,b('save_product',{id:product,version:2,name:'Meal changed',price_centavos:99999,active:true}));
+ const id=await createOrder();await cmd(owner,b('save_product',{id:product,version:2,name:'Meal changed',price_centavos:99999,active:true,category:'Rice Meals'}));
  await transition(id,'accepted',1);await transition(id,'ready',2);await assert.rejects(transition(id,'rejected',3),/invalid_transition/);
  const data=await snap(owner);assert.equal(data.orders.find(o=>o.id===id).total_centavos,12550);assert.equal(data.items.find(i=>i.order_id===id).name,'Meal');assert.equal(data.allocations[0].used,1);
+ const current=data.products.find(p=>p.id===product);
+ await cmd(owner,b('save_product',{...current,category:'Sizzling'}));
+ const recategorized=await snap(owner);
+ assert.equal(recategorized.products.find(p=>p.id===product).category,'Sizzling');
+ assert.deepEqual(recategorized.orders,data.orders);
+ assert.deepEqual(recategorized.items,data.items);
+ assert.deepEqual(recategorized.allocations,data.allocations);
 });
 await t.test('rejected accepted orders restore; unclaimed ready orders remain uncollected',async()=>{
  let data=await snap(owner);await cmd(owner,b('set_allocation',{id:product,business_date:day,total:3,version:data.allocations[0].version,reason:'More portions'}));
@@ -136,6 +183,28 @@ await t.test('audit records are owner-only and staff removal applies immediately
  assert.ok((await snap(owner)).events.length>0);assert.equal((await snap(staff)).events.length,0);
  await cmd(owner,b('remove_staff',{id:staff}));assert.equal(await snap(staff),null);
  await assert.rejects(cmd(staff,b('save_customer',{id:randomUUID(),version:0,name:'No access'})),/permission_denied/);
+});
+await t.test('knowledge survives simulator removal with owner-only versioned idempotent saves',async()=>{
+ const save=(user,payload)=>as(user,async tx=>(await tx.query('select public.knowledge_command($1::jsonb) as result',[JSON.stringify({request_id:randomUUID(),business_id:bid,...payload})])).rows[0].result);
+ const id=randomUUID(),request_id=randomUUID();
+ const payload={op:'knowledge',id,request_id,title:'Pickup',body:'Counter pickup',approved:true,version:0};
+ await cmd(owner,b('add_staff',{email:'staff@test.invalid'}));
+ for(const user of [staff,otherOwner,stranger]) await assert.rejects(save(user,payload),/permission_denied/);
+ await save(owner,payload);await save(owner,payload);
+ await assert.rejects(save(owner,{...payload,title:'Changed'}),/request_conflict/);
+ await save(owner,{...payload,request_id:randomUUID(),version:1,approved:false});
+ await assert.rejects(save(owner,{...payload,request_id:randomUUID(),version:1}),/conflict/);
+ await save(owner,payload); // Lost acknowledgement of an older save cannot undo later changes.
+ assert.equal((await as(owner,tx=>tx.query('select * from public.knowledge_versions where id=$1',[id]))).rows.length,2);
+ assert.equal((await as(owner,tx=>tx.query('select approved from public.business_knowledge where id=$1',[id]))).rows[0].approved,false);
+ for(const user of [otherOwner,staff]) assert.equal((await as(user,tx=>tx.query('select * from public.business_knowledge'))).rows.length,0);
+ await assert.rejects(as(owner,tx=>tx.query('update public.business_knowledge set approved=true')),/permission denied/);
+ await assert.rejects(save(owner,{...payload,id:randomUUID(),request_id:randomUUID(),approved:'true'}),/Invalid knowledge request/);
+ await assert.rejects(db.transaction(async tx=>{await tx.exec('set local role anon');await tx.query('select public.knowledge_command($1::jsonb)',[JSON.stringify(payload)]);}),/permission denied/);
+ const retired=await db.query("select tablename from pg_tables where schemaname in ('public','private') and (tablename like 'test_%' or tablename='ai_evaluations')");
+ assert.deepEqual(retired.rows,[]);
+ const functions=await db.query("select proname from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname in ('public','private') and (proname like '%test_%' or proname='chat_command')");
+ assert.deepEqual(functions.rows,[]);
 });
 await t.test('anonymous cannot invoke application RPCs',async()=>{
  await assert.rejects(db.transaction(async(tx)=>{await tx.exec('set local role anon');await tx.query('select public.app_snapshot()');}),/permission denied/);

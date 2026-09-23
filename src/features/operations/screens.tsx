@@ -12,8 +12,8 @@ import { useOperations } from '@/state/operations';
 import { signOut } from '@/state/auth';
 import { colors, spacing, textStyles } from '@/theme/tokens';
 import { errorText, uploadPhoto } from './api';
-import { money, parsePrice, pickupTimestamp, quantity, statusLabel, transitions, type Business, type Customer, type OrderRecord, type Product, type Status } from './domain';
-import { Copy, DataScreen, ErrorNotice, FormCard, PendingSave, ProductPhoto, useMutation } from './ui';
+import { menuAvailability, menuCategories, money, parsePrice, pickupTimestamp, quantity, statusLabel, transitions, type MenuCategory, type Business, type Customer, type OrderRecord, type Product, type Status } from './domain';
+import { Copy, DataScreen, ErrorNotice, FormCard, PendingSave, ProductPhoto, SuccessNotice, useMutation } from './ui';
 
 export function Dashboard() {
   const { data, loading, error, refresh } = useOperations();
@@ -37,7 +37,7 @@ export function Dashboard() {
       <AppButton label="Manage orders" onPress={()=>router.push('/(owner)/(tabs)/orders')} />
       <AppButton label="New manual order" variant="secondary" onPress={()=>router.push({pathname:'/(owner)/order/[id]',params:{id:'new'}})} />
     </FormCard>
-    <FormCard><Copy>Messenger, AI, promotions, and research analytics are not connected in this release.</Copy></FormCard>
+    <FormCard><Copy>Messenger, promotions, and research analytics are not connected in this release.</Copy></FormCard>
   </DataScreen>;
 }
 
@@ -47,9 +47,9 @@ export function Menu() {
   return <DataScreen title="Menu">
     <SearchField placeholder="Search menu" value={query} onChangeText={setQuery} />
     {data?.role==='owner' ? <AppButton label="Add menu item" onPress={()=>router.push({pathname:'/(owner)/menu-item/[id]',params:{id:'new'}})} />:null}
-    {visible.map((item)=>{const allocation=data?.allocations.find((a)=>a.product_id===item.id);return <FormCard key={item.id}>
+    {visible.map((item)=>{const allocation=data?.allocations.find((a)=>a.product_id===item.id);const availability=menuAvailability(item,allocation);return <FormCard key={item.id}>
       <ProductPhoto path={item.photo_path} /><Text style={textStyles.title}>{item.name} · {money(item.price_centavos)}</Text><Copy>{item.description}</Copy>
-      <Copy>{item.active?'Available':'Paused'} · {allocation ? allocation.total-allocation.used : 0} remaining today</Copy>
+      <Copy>{availability.status==='paused'?'Paused':availability.status==='unavailable'?'Unavailable':availability.status==='low-stock'?'Low stock':'Available'} · {availability.remaining} remaining today</Copy>
       {data?.role==='owner'?<AppButton label="Edit item and quantity" variant="secondary" onPress={()=>router.push({pathname:'/(owner)/menu-item/[id]',params:{id:item.id}})} />:null}
     </FormCard>;})}
     {!visible.length?<Copy>No matching menu items. Add an item to begin.</Copy>:null}
@@ -67,6 +67,7 @@ function ProductEditor({item}:{item?:Product}) {
   const [id]=useState(()=>item?.id??Crypto.randomUUID());
   const [name,setName]=useState(item?.name??''); const [price,setPrice]=useState(item ? (item.price_centavos/100).toFixed(2):'');
   const [description,setDescription]=useState(item?.description??''); const [active,setActive]=useState(item?.active??true);
+  const [category,setCategory]=useState<MenuCategory|null>(item?.category??null);
   const [photo,setPhoto]=useState<ImagePicker.ImagePickerAsset|null>(null); const [uploading,setUploading]=useState(false); const [error,setError]=useState<string|null>(null);
   const uploaded=useRef<{uri:string;path:string}|null>(null);
   const [version,setVersion]=useState(item?.version??0);
@@ -81,8 +82,9 @@ function ProductEditor({item}:{item?:Product}) {
       if(!name.trim())throw new Error('Enter the menu name.'); const cents=parsePrice(price);
       let path=item?.photo_path??null;
       if(photo){if(uploaded.current?.uri!==photo.uri)uploaded.current={uri:photo.uri,path:await uploadPhoto(data.business.id,id,photo)};path=uploaded.current.path;}
-      await mutation.run({op:'save_product',business_id:data.business.id,id,version,name:name.trim(),description,price_centavos:cents,active,photo_path:path},()=>{
-        setVersion((n)=>n+1);router.replace({pathname:'/(owner)/menu-item/[id]',params:{id}});
+      if(category && (category.trim().length>40 || /^(all|uncategorized)$/i.test(category.trim()) || /[\u0000-\u001f\u007f]/.test(category)))throw new Error('Enter a category of up to 40 characters; All and Uncategorized are reserved.');
+      await mutation.run({op:'save_product',business_id:data.business.id,id,version,name:name.trim(),description,price_centavos:cents,active,photo_path:path,category:category?.trim()||null},()=>{
+        setVersion((n)=>n+1);router.replace('/(owner)/(tabs)/menu');
       });
     }catch(failure){setError(errorText(failure));}finally{setUploading(false);}
   }
@@ -91,6 +93,10 @@ function ProductEditor({item}:{item?:Product}) {
       <AppButton label="Choose photo" disabled={uploading||mutation.busy} variant="secondary" onPress={()=>{void choose();}} />
       <FormField label="Menu name" value={name} onChangeText={setName} /><FormField label="Price (PHP)" inputMode="decimal" value={price} onChangeText={setPrice} />
       <FormField label="Description" multiline value={description} onChangeText={setDescription} />
+      <FormField label="Category" placeholder="Enter a category or choose below" maxLength={40} value={category??''} onChangeText={setCategory} />
+      <View style={{flexDirection:'row',flexWrap:'wrap',gap:8}}>
+        {[null,...menuCategories(data?.products??[])].map((value)=><AppButton key={value??'unassigned'} label={value??'Uncategorized'} variant={category===value?'primary':'secondary'} disabled={uploading||mutation.busy} onPress={()=>setCategory(value)} />)}
+      </View>
       <Copy>Available for new orders</Copy><Switch accessibilityLabel="Available for new orders" value={active} onValueChange={setActive} />
       <ErrorNotice message={error??mutation.error} />{mutation.success?<Copy>Menu item saved.</Copy>:null}
       <AppButton label={uploading||mutation.busy?'Saving…':'Save menu item'} disabled={uploading||mutation.busy} onPress={()=>{void save();}} />
@@ -105,7 +111,7 @@ function AllocationEditor({productId}:{productId:string}) {
   return <FormCard><Text style={textStyles.title}>Daily sellable quantity</Text><Copy>{data?.today} · {allocation?.used??0} already allocated. Historical days are preserved.</Copy>
     <FormField label="Total quantity for today" inputMode="numeric" value={total} onChangeText={setTotal} /><FormField label="Adjustment reason" value={reason} onChangeText={setReason} />
     <ErrorNotice message={error??mutation.error} />{mutation.success?<Copy>Daily quantity saved.</Copy>:null}
-    <AppButton label="Save daily quantity" disabled={mutation.busy} onPress={()=>{try {setError(null);const count=quantity(total);if(!reason.trim())throw new Error('Enter an adjustment reason.');void mutation.run({op:'set_allocation',business_id:data!.business.id,id:productId,business_date:data!.today,version,total:count,reason},()=>setVersion((n)=>n+1));}catch(failure){setError(errorText(failure));}}} />
+    <AppButton label="Save daily quantity" disabled={mutation.busy} onPress={()=>{try {setError(null);const count=quantity(total);if(!reason.trim())throw new Error('Enter an adjustment reason.');void mutation.run({op:'set_allocation',business_id:data!.business.id,id:productId,business_date:data!.today,version,total:count,reason},()=>{setVersion((n)=>n+1);router.replace('/(owner)/(tabs)/menu');});}catch(failure){setError(errorText(failure));}}} />
   </FormCard>;
 }
 
@@ -190,10 +196,11 @@ export function Settings() {
   const {data,loading,error:loadError,refresh,notice}=useOperations();const [error,setError]=useState<string|null>(null);
   return <AppScreen detail hideSettings title="Settings">
     {loading?<ActivityIndicator accessibilityLabel="Loading business settings" />:null}<ErrorNotice message={loadError} />
-    {notice?<Copy>{notice}</Copy>:null}{loadError?<AppButton label="Retry" variant="secondary" disabled={loading} onPress={()=>{void refresh();}} />:null}
+    {notice?<SuccessNotice message={notice} />:null}{loadError?<AppButton label="Retry" variant="secondary" disabled={loading} onPress={()=>{void refresh();}} />:null}
     <PendingSave />
     {data?.role==='owner'?<SettingsEditor key={`${data.business.id}-${data.business.version}`} business={data.business} />:data?<Copy>Business settings are managed by the owner.</Copy>:!loading?<AppButton label="Open business setup" onPress={()=>router.replace('/(owner)/(tabs)/dashboard')} />:null}
-    <Text style={textStyles.title}>Integrations</Text><FormCard><Copy>Meta and AI integrations are unavailable in this phase.</Copy></FormCard>
+    <Text style={textStyles.title}>Integrations</Text><FormCard><Copy>Messenger connection status and automation controls are available in the owner inbox. Facebook publishing is not enabled.</Copy>{data?.role==='owner'?<AppButton label="Messenger connection and inbox" onPress={()=>router.push('/(owner)/messenger')} />:null}</FormCard>
+    {data?.role==='owner'?<AppButton label="Approved knowledge" variant="secondary" onPress={()=>router.push('/(owner)/knowledge')} />:null}
     <AppButton label="Change password" variant="secondary" onPress={()=>router.push('/(auth)/recovery')} />
     <ErrorNotice message={error} /><AppButton label="Sign out" variant="danger" onPress={()=>{void signOut().catch((failure)=>setError(errorText(failure)));}} />
   </AppScreen>;

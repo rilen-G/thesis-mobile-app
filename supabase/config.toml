@@ -4,6 +4,13 @@
 # working directory name when running `supabase init`.
 project_id = "qfacio-operations"
 
+[functions.messenger-ingest]
+verify_jwt = false
+[functions.messenger-dispatch]
+verify_jwt = false
+[functions.messenger-worker]
+verify_jwt = false
+
 [api]
 enabled = true
 # Port to use for the API URL.

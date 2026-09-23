@@ -10,6 +10,7 @@ export function errorText(error: unknown): string {
   const message = error instanceof Error ? error.message : typeof error === 'object' && error && 'message' in error ? String(error.message) : 'The request failed. Check your connection and retry.';
   const known: Record<string, string> = {
     permission_denied: 'Your account does not have permission for this action.', conflict: 'This record changed. Reload it before saving again.',
+    draft_changed: 'The menu or conversation changed after this summary. Send a new test message to get an updated summary before confirming.',
     insufficient_quantity: 'There is not enough daily quantity. Refresh the menu and adjust this order.',
     rules_required: 'The owner must record the business order rules in Settings before confirming orders.',
     invalid_transition: 'This order cannot move to that status.', pickup_closed: 'Pickup must be today, in the future, within the approved business hours.',

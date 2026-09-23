@@ -12,8 +12,9 @@
     "typecheck": "tsc --noEmit",
     "lint": "expo lint",
     "doctor": "npx expo-doctor",
-    "test": "node --import tsx --test tests/domain.test.ts tests/database.test.mjs",
+    "test": "node --import tsx --test tests/domain.test.ts tests/menu.test.ts tests/chat.test.ts tests/messenger.test.ts tests/database.test.mjs tests/messenger-database.test.mjs",
     "test:postgres": "node --test tests/database-postgres.test.mjs",
+    "test:messenger:postgres": "node --test tests/messenger-postgres.test.mjs",
     "test:browser": "node tests/browser-smoke.mjs"
   },
   "dependencies": {

@@ -1,64 +1,27 @@
-# App Natin
+# Q&Facio mobile
 
-React Native + Expo application for Q&Facio kitchen operations. Phases 1–2 now have Supabase-backed authentication, business membership, private menu photos, customers, settings, and manual orders with atomic daily allocation. Configure a dedicated development backend before use; the app does not fall back to sample records.
+Android-first Expo / React Native application for the thesis **Development of AI-Agentic Digital Marketing and Chat-Based App for Philippine Micro and Small Foodservice Establishments**.
 
-The native UI follows the sibling `mockup/` frontend as its visual source of truth while retaining the Supabase-backed behavior and native loading/error states.
+The app supports Supabase authentication, business membership, menu and private photos, customers, manual orders, daily quantities, owner-managed approved knowledge, and a disabled-by-default live Messenger integration through Zapier. Gemini runs on the backend. Messenger requires backend deployment, Zap configuration, and Page verification; see [Messenger setup](docs/MESSENGER.md). Automated publishing, promotional export, and timed follow-ups remain planned work.
 
-Follow [Backend Setup and Phase 1–2 Validation](docs/14-backend-setup.md) for migrations, account recovery, roles, and the remaining hosted/device acceptance checks. Meta, AI, promotions, and research analytics are explicitly unavailable in this release.
+## Start here
 
-## Read docs
-Make sure to read the Markdown files inside docs to understand the context of the project requirements and architecture. Feel free to change the contents if an error is found.
+1. Run `npm install` from this directory.
+2. Configure `.env` and your backend using [Setup](docs/SETUP.md).
+3. Run `npm start`, then scan the QR code with Expo Go on the same Wi-Fi network.
 
-## Run with Expo Go
+Use `npm run web` for a browser preview. If LAN discovery fails, use `npx expo start --go --tunnel`; use `--clear` for a stale Metro cache. Native libraries outside Expo Go require `npm run start:dev-client` and a development build.
 
-1. Install the current Expo Go app on the phone.
-2. Connect the computer and phone to the same Wi-Fi network.
-3. From this `mobile` directory, run:
+## Documentation
 
-   ```powershell
-   npm install
-   npm start
-   ```
+- [Setup](docs/SETUP.md): environment, database, accounts, AI configuration, and builds.
+- [Architecture](docs/ARCHITECTURE.md): code layout, permissions, order rules, and chat behavior.
+- [Roadmap](docs/ROADMAP.md): current scope, remaining work, and decisions.
+- [Validation](docs/VALIDATION.md): test commands, recorded evidence, and research gates.
 
-4. Scan the QR code with Expo Go on Android or the Camera app on iOS.
+Business records belong in Supabase Database; product images belong in private Supabase Storage. The repository contains application code, one initial schema migration, and purposeful tests. Buckstars is fictional hosted demonstration data, not bundled application content.
 
-`npm start` explicitly starts the Expo Go workflow. Local Expo Go development does not require matching Expo CLI and Expo Go account sessions. An Expo account is required for EAS cloud builds.
-
-If LAN discovery is blocked by the network, run `npx expo start --go --tunnel` instead. If Metro has stale files, run `npx expo start --go --clear`.
-
-## Other development commands
-
-```powershell
-npm run typecheck
-npm run lint
-npm run web
-npm run start:dev-client
-```
-
-The development-client command is only needed after adding native libraries that Expo Go does not include.
-
-## Build an Android APK
-
-The `preview` profile in `eas.json` is configured to produce an installable APK:
-
-```powershell
-npx eas-cli login
-npx eas-cli build --platform android --profile preview
-```
-
-Use the `production` profile for store-ready Android output. iOS builds use the same project but produce an iOS build rather than an APK.
-
-## Implemented workflows
-
-- Registration, email verification, sign-in, session restoration, recovery, and sign-out.
-- Business creation and owner-managed staff membership.
-- Menu editing, private gallery photo upload, availability, and daily quantity adjustments.
-- Customer creation/editing/archiving and order history.
-- Manual confirmed orders, immutable price snapshots, the six-status order lifecycle, and exactly-once quantity reservation/restoration on staff acceptance and eligible rejection.
-- Owner activity history, business hours, approved order rules, and saved post-format preference.
-- Durable recovery of uncertain saves with an explicit retry; no automatic offline sending.
-
-## Automated checks
+## Checks
 
 ```powershell
 npm run typecheck
@@ -68,4 +31,4 @@ npm run test:postgres
 npm run doctor
 ```
 
-The PostgreSQL suite starts an isolated localhost database under `.test-artifacts` and never uses a hosted project. See the setup guide for test limitations and browser/device checks.
+Database tests use disposable local databases. Hosted checks and AI evaluations are separate, explicit commands documented in [Validation](docs/VALIDATION.md). Commits and pushes require the repository owner's instruction.

@@ -10,6 +10,7 @@ export function FormField({ label, multiline, style, ...props }: Props) {
     <View style={styles.wrap}>
       <Text style={styles.label}>{label}</Text>
       <TextInput
+        accessibilityLabel={label}
         multiline={multiline}
         placeholderTextColor={colors.subtleText}
         style={[styles.input, multiline && styles.multiline, style]}
