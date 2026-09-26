@@ -1,6 +1,8 @@
 # Messenger and Zapier setup
 
-The app implements live Messenger intake, grounded replies, coded order confirmation, owner takeover/manual replies, and status messages. It does not implement promotional publishing or timed follow-ups. Approved knowledge is managed in Settings; the former AI test chat is removed. Deployment and real Page acceptance are separate from local test results.
+The app implements live Messenger intake, grounded replies, coded order confirmation, owner takeover/manual replies, and status messages. It does not implement promotional publishing or timed follow-ups. Approved knowledge is managed in Settings. Deployment and real Page acceptance are separate from local test results.
+
+The fixed connection-test reply confirms transport only. The thesis-required Supabase RAG retrieval path is [still to be implemented](RAG.md); the current grounded reply path supplies a bounded approved-knowledge set to Gemini.
 
 ## 1. Collect actual Page evidence
 

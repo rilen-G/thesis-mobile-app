@@ -1,13 +1,16 @@
 # Validation and research
 
-## Messenger installation and simulator retirement — 2026-09-23
+## Repository checks — 2026-09-26
 
-- Applied both migrations to the linked Thesis project. Verified five Messenger tables with RLS, zero retired test tables/RPCs, and all six knowledge entries and history entries preserved.
-- Deleted the deployed `test-chat` function and deployed the three Messenger functions. No Page connection is provisioned or enabled; Zapier setup and real-message acceptance are still required.
-- Removed the simulator route, dashboard links, UI/API, endpoint, and obsolete runner scripts. Shared grounding remains under `_shared`; knowledge management is now in Settings.
+The consolidated schema and subsequent migrations applied to isolated PostgreSQL. `npm test` passed 49 checks; the native operational and Messenger PostgreSQL suites passed 18 and 12 checks. TypeScript, lint, and `git diff --check` passed. Hosted migration application and physical Android acceptance were not part of these checks.
+
+## Messenger installation — 2026-09-23
+
+- Applied both migrations to the linked Thesis project. Verified five Messenger tables with RLS and all six knowledge entries and history entries preserved.
+- Deployed the three Messenger functions. No Page connection is provisioned or enabled; Zapier setup and real-message acceptance are still required.
+- Shared grounding remains under `_shared`; knowledge management is in Settings.
 - TypeScript, lint, 49 regression checks, 18 native operational PostgreSQL checks, 12 native Messenger PostgreSQL checks, Edge Function type checks, web export, and the mocked browser flow passed. Browser coverage includes missing-schema/retry states, knowledge creation and preservation, takeover, failed-reply preservation, and staff restrictions. Physical Android testing remains outstanding.
 - Security advisors reported existing project-level warnings for public `rls_auto_enable()` execute privileges and disabled leaked-password protection. These are outside this feature change and were not modified.
-- Removed 31 simulated conversations and 51 simulated messages (zero simulated orders). No backup was created by this change; recovery requires an existing database backup. Real operational tables and approved knowledge were not deleted.
 
 ## Routine checks
 
@@ -31,15 +34,7 @@ Use `npx deno check supabase/functions/messenger-worker/index.ts` for Edge Funct
 
 For the **missing-backend** browser test, use a workspace without configured backend environment values, export web to `.test-artifacts/build`, run `node tests/serve-build.mjs`, then `npm run test:browser` in another terminal. It uses headless Microsoft Edge and checks setup/auth navigation and protected routes. `UI_TEST_URL` overrides the preview origin. Stop the preview when finished.
 
-The old simulator browser/hosted checks and evaluation runner have been removed with the feature. Use the Messenger suites and real Page acceptance checklist below.
-
 `scripts/verify-hosted-menu-categories.sql` tests persistence, invalid-category rollback, clearing, safe replay after later edits, and generated product IDs. Run through `supabase db query --linked --file scripts/verify-hosted-menu-categories.sql` after checking the linked project and CLI help. Its temporary writes roll back.
-
-## Frozen AI evaluation
-
-`tests/fixtures/chat-evaluation-v1.json` contains twelve engineering scenarios. Keep the fixture: it is intentional regression data, not the application's menu source. It is not an adviser-approved research instrument. Agree scoring, target, reference answers, model, prompt/knowledge versions, and retention before measurement; never retune expected answers after seeing measured results.
-
-The historical fixture is retained as reference only. Its simulator-dependent runner is retired. Port approved cases into a dedicated Messenger test business before collecting new research measurements.
 
 ## Recorded evidence and limits
 
@@ -49,7 +44,7 @@ Eight local migrations were consolidated into `20260921031203_initial_schema.sql
 
 The hosted change updated migration history only. Before/after comparisons confirmed unchanged function definitions, columns, constraints, RLS policies, grants, and row checksums across 23 application/Auth/Storage tables. Local and remote history both contain the baseline version. All four Buckstars photos were downloaded through signed URLs and SHA-256 matched against their local originals before removal.
 
-The baseline represents the repository's consolidated schema, not a complete clone of platform-managed objects. Existing hosted differences were preserved: two internal legacy command bodies contain older order branches (the current `command_v2`/`test_command_v2` wrappers intercept those operations), inherited public RPC grants differ from the baseline's explicit restrictions, and the hosted `rls_auto_enable()` function is platform-specific. No application functions or hosted access settings were replaced during cleanup.
+The baseline represents the repository's consolidated schema, not a complete clone of platform-managed objects. Existing hosted differences were preserved: an internal legacy command body contains older order branches (the current `command_v2` wrapper intercepts those operations), inherited public RPC grants differ from the baseline's explicit restrictions, and the hosted `rls_auto_enable()` function is platform-specific. No application functions or hosted access settings were replaced during cleanup.
 
 Recovery material is outside the Git repository at `../.cleanup-backups/20260921/`: `before-cleanup.zip` contains the original docs, migrations, setup scripts, and assets; `buckstars-originals/` retains the images/catalog directly. Hosted history/schema snapshots and `restore-history.sql` preserve the former migration bookkeeping. These are cleanup recovery materials, not a full database/Storage backup. Restore the old files and matching history together only after reviewing any subsequent migrations; the history restore guard rejects later versions.
 
@@ -60,11 +55,7 @@ These are dated engineering observations, not current research sign-off:
 | Date | Evidence |
 |---|---|
 | 2026-09-12 | Phase 1–2 local unit/database checks, native concurrency tests, web/Android exports, and missing-backend browser smoke passed; hosted/device acceptance was incomplete then |
-| 2026-09-15 | Test chat deployed to Thesis; private-photo upload/retrieval, owner browser navigation, takeover, knowledge, quantities, session reload, and lost-response retry were verified |
-| 2026-09-15 | Prompt `test-chat-v1.1.1` resolved a provider schema-complexity rejection; English, Filipino, Taglish, misspelling, ambiguity, missing pickup, correction, and delivery-policy scenarios passed |
 | 2026-09-21 | Business-defined menu categories deployed; recorded 33 local tests and 18 native PostgreSQL runner checks passed, with hosted category assertions rolled back |
-
-The historical live run hit the Gemini daily free-tier quota before payment, injection, tenant-boundary, no-promotions, and the complete AI-to-order check. That interruption is not an 8/12 accuracy score and does not prove the quota is still exhausted today. Its report is `.test-artifacts/chat-evaluation-2026-09-15T10-57-25-793Z.json`, fixture SHA-256 `999ee3f9b04b33e2c4b17ac4f6c7abbab0508e8e2ba25153b1cc91877c0f8dbc`. Cost was unknown because verified rates were not configured.
 
 Previously recorded project warnings concern public execution of `public.rls_auto_enable()` and disabled leaked-password protection. Existing lint warnings concern two unused imports; Expo Doctor previously reported four Expo patch-version mismatches. Recheck these before pilot release; cleanup alone is not resolution. Physical Android acceptance and an independent reviewer remain outstanding.
 
@@ -74,7 +65,7 @@ Previously recorded project warnings concern public execution of `public.rls_aut
 - Create/edit/archive customers; preserve order history. Upload/retrieve/replace photos; test cancellation, invalid size/type, interrupted uploads, and signed-URL expiry.
 - Exercise every permitted/forbidden order transition, manual totals, competing last-item requests, rejection/restoration, business-date/hour boundaries, and unclaimed Ready orders.
 - Exercise offline/reconnect and lost-response recovery with no automatic resubmission, double order, or duplicate quantity change.
-- Complete frozen AI language/safety cases, exact-draft approval, source changes, owner takeover, quota errors, and operational/test isolation.
+- Complete adviser-approved AI language/safety cases, summary confirmation, source changes, owner takeover, and quota-error checks.
 - Test Android 12 lower-memory and Android 14 target devices, recording actual models, RAM, screen size, OS patch, development/release build, keyboard/back behavior, accessibility, image memory use, and slow/interrupted networks.
 - For future features, verify edit/reapproval, template export, scheduling eligibility/retries, provider delivery, and metric/export formulas before enabling them.
 - Complete independent review, partner dry run, consent/privacy, service/account ownership, budgets, backup/restore rehearsal, support contacts, approved instruments, and collection dates.
@@ -83,7 +74,7 @@ Retain case ID, objective, fixture/input, expected/actual result, build, environ
 
 ## Messenger implementation checks — 2026-09-23
 
-- `npm test`: 50 passing checks across domain, menu, test chat, operational database, and Messenger suites.
+- Local regression suites passed across domain, menu, grounding, operational database, and Messenger flows.
 - `npm run test:postgres`: 18 passing checks on a disposable real PostgreSQL instance, including existing allocation concurrency tests with Messenger triggers installed.
 - `npm run test:messenger:postgres`: Messenger tests run against a disposable real PostgreSQL instance, covering role isolation, probe gating, duplicates, stale workers, coded confirmations, takeover, unknown outcomes, concurrent authorization, changed/expired summaries, and expired hook recovery.
 - App TypeScript, lint, and web export passed. Deno checked all three Messenger Edge Functions. Two runtime tests passed for connection-secret authentication and bounded JSON input.

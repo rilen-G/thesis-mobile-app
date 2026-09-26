@@ -18,12 +18,12 @@ test('hook transport cannot target an arbitrary server', () => {
   assert.equal(validHookUrl('https://hooks.zapier.com/hooks/catch/1/abc/'), true);
   for (const url of ['http://hooks.zapier.com/hooks/catch/1/abc', 'https://hooks.zapier.com.evil.test/hooks/catch/1/a', 'https://user:secret@hooks.zapier.com/hooks/catch/a', 'https://127.0.0.1/']) assert.equal(validHookUrl(url), false);
 });
-test('live renderer removes test wording without rewriting approved knowledge', () => {
+test('live renderer preserves approved knowledge and uses current availability', () => {
   const context = { products: [{ id: 'p', name: 'Coffee TEST', description: '', price_centavos: 100, active: true, version: 1 }],
     knowledge: [{ id: 'k', title: 'Tests', body: 'Review this TEST order:', approved: true, version: 1 }],
     allocations: [{ product_id: 'p', total: 10, used: 0 }], today: '2026-09-23', opening: '00:00:00', cutoff: '23:59:59', now: '2026-09-23T08:00:00+08:00' };
   const base = { intent: 'menu', language: 'en', product_ids: ['p'], source_ids: [], items: [], pickup_at: null, payment_method: null, clarification: 'none' };
   assert.match(liveReply(base, context).body, /Coffee TEST: ₱1.00 · 10 available online/);
   assert.equal(liveReply({ ...base, intent: 'faq', source_ids: ['k'] }, context).body, 'Tests: Review this TEST order:');
-  assert.doesNotMatch(LIVE_SYSTEM_PROMPT, /TEST CHAT|owner explicitly creates a test order/);
+  assert.match(LIVE_SYSTEM_PROMPT, /Messenger/);
 });

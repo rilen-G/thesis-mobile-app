@@ -2,10 +2,6 @@
 select jsonb_build_object(
  'messenger_tables', (select jsonb_agg(tablename order by tablename) from pg_tables
    where schemaname='public' and tablename like 'messenger_%'),
- 'retired_tables', (select count(*) from pg_tables where schemaname in ('public','private')
-   and (tablename like 'test_%' or tablename='ai_evaluations')),
- 'retired_functions', (select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace
-   where n.nspname in ('public','private') and (proname like '%test_%' or proname='chat_command')),
  'knowledge_entries', (select count(*) from public.business_knowledge),
  'knowledge_history_entries', (select count(*) from public.knowledge_versions),
  'knowledge_rpc', to_regprocedure('public.knowledge_command(jsonb)') is not null,

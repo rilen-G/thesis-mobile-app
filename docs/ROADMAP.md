@@ -2,13 +2,14 @@
 
 ## Current position
 
-This Android-first thesis app supports Philippine micro and small foodservice businesses. Owners manage the business and approve consequential actions; staff handle daily operations. Customers are intended to use Messenger when the live integration is approved and available. The current in-app customer chat is explicitly a test environment.
+This Android-first thesis app supports Philippine micro and small foodservice businesses. Owners manage the business and approve consequential actions; staff handle daily operations. Customers are intended to use Messenger when the live integration is approved and available.
 
 | Area | Status |
 |---|---|
 | Auth, membership, menu/photos, customers, settings | Implemented; remaining hosted/device acceptance is listed in [Validation](VALIDATION.md) |
 | Manual orders, quantities, audit, recovery of uncertain saves | Implemented with database regression coverage |
-| Approved knowledge and grounded Messenger extraction | Implemented; former AI test chat retired |
+| Approved knowledge and grounded Messenger extraction | Implemented |
+| Query-specific Supabase RAG for Messenger replies | Not implemented; see [RAG implementation brief](RAG.md) |
 | Promotional drafts, template editing, manual export | Planned |
 | Follow-up reminders and simulated delivery | Planned |
 | Research dashboard and exports | Planned beyond current operational views |
@@ -27,7 +28,7 @@ Payment processing/verification, courier dispatch, accounting/POS replacement, a
 | 0 | Reproducible environment and delivery ownership | Another member can run the build; account recovery, budgets, target devices, and deployment responsibilities are recorded |
 | 1 | Persistent business operations | Owner creates a private-photo menu item, restarts, retrieves it; unrelated-business and staff restrictions hold |
 | 2 | Manual orders and daily allocation | Complete an order, preserve historical prices, prevent last-item overselling, and reconcile lost responses without duplicates |
-| 3 | Grounded Messenger replies | Frozen language/safety scenarios meet the approved scoring method; takeover works; test activity never affects operational totals |
+| 3 | Grounded Messenger replies and Supabase RAG | Query-specific retrieval and source/version isolation pass [RAG acceptance](RAG.md#acceptance-evidence); frozen language/safety scenarios meet the approved scoring method; takeover works; test activity never affects operational totals |
 | 4 | Promotional drafts and manual export | Drafts restore, edits invalidate approval, and accurate graphics export on physical Android |
 | 5 | Follow-up reminders and simulation | Fixed-clock tests prove timing, eligibility, stop conditions, two-message cap, and retry/crash recovery |
 | 6 | Dashboard and research exports | Formulas match hand calculations; test data and unavailable external metrics remain distinguishable |
@@ -68,7 +69,7 @@ Official sources checked on 2026-09-23; verify again in the intended Zapier acco
 
 ### Planned workflow boundaries
 
-Zapier transports events and executes approved external actions. The trusted application backend continues to own business rules, grounded Gemini processing, order validation, approvals, takeover, and follow-up eligibility. Live Messenger uses the operational intake path; the former owner-only test chat has been retired. Do not replace validated reply generation with an independent Zapier chatbot by default.
+Zapier transports events and executes approved external actions. The trusted application backend continues to own business rules, grounded Gemini processing, order validation, approvals, takeover, and follow-up eligibility. Live Messenger uses the operational intake path. Do not replace validated reply generation with an independent Zapier chatbot by default.
 
 Bind each connection to its business and Page. Authenticate inbound requests and callbacks using a verified mechanism supported by the chosen workflow; validate signatures where supplied, reject replay/forged requests, persist stable event IDs, and process heavy work asynchronously. Keep automation credentials and webhook URLs out of the mobile bundle; never give Zaps unrestricted database credentials. Send only the data needed for the workflow and define access/retention for Zap history.
 

@@ -9,6 +9,7 @@ Read only the guide needed for your task:
 | [Roadmap](ROADMAP.md) | What works, what remains, feature acceptance gates, unresolved decisions |
 | [Validation](VALIDATION.md) | Tests, historical evidence, device checklist, research measures |
 | [Messenger setup](MESSENGER.md) | Zapier field mappings, disabled connection provisioning, worker schedule, verification and recovery |
+| [Supabase RAG](RAG.md) | Current grounding limits, required retrieval work, and acceptance evidence for thesis RAG |
 
 Start with Setup to run the application, or Roadmap to understand the project. Architecture describes implemented behavior; Roadmap marks future work explicitly. Validation distinguishes engineering checks from research approval.
 

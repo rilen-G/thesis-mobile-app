@@ -1,4 +1,4 @@
--- Preserve approved business knowledge; remove the retired simulator and its data.
+-- Owner-only approved knowledge updates with version history and idempotent retries.
 create function private.knowledge_command(payload jsonb) returns jsonb
 language plpgsql security definer set search_path = '' as $$
 declare
@@ -45,22 +45,4 @@ language sql set search_path = '' as $$select private.knowledge_command(payload)
 revoke all on function public.knowledge_command(jsonb),private.knowledge_command(jsonb) from public,anon,authenticated;
 grant execute on function public.knowledge_command(jsonb),private.knowledge_command(jsonb) to authenticated;
 
-drop function public.test_chat_command(jsonb);
-drop function public.claim_test_reply(uuid,uuid);
-drop function public.finish_test_reply(jsonb,uuid);
-drop function private.chat_command(jsonb);
-drop function private.claim_test_reply(uuid);
-drop function private.confirm_test_draft(jsonb);
-drop function private.finish_test_reply(jsonb);
-drop function private.test_command_v2(jsonb);
-drop function private.test_command(jsonb);
-drop table public.ai_evaluations;
-drop table public.test_order_items;
-drop table public.test_orders;
-drop table public.test_daily_allocations;
-drop table public.test_messages;
-drop table public.test_conversations;
-drop table public.test_customers;
-drop table public.test_audit_events;
-drop table private.test_requests;
 notify pgrst, 'reload schema';

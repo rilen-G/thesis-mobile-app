@@ -48,7 +48,7 @@ Before removing unused hosted uploads, check all database references and allow a
 
 ## Approved knowledge and AI replies
 
-Open **Settings → Approved knowledge** to maintain FAQs and policies for live Messenger. Existing entries and version history are preserved. The former AI test chat, simulated orders/quantities, and its endpoint are retired by migration `20260922183054_retire_ai_test_chat.sql`. Do not redeploy the old endpoint.
+Open **Settings → Approved knowledge** to maintain FAQs and policies for live Messenger. Existing entries and version history are preserved. Migration `20260922183054_knowledge_command.sql` provides the owner-only knowledge command.
 
 Set `GEMINI_API_KEY` in backend Edge Function secrets. The optional `GEMINI_MODEL` override defaults to `gemini-2.5-flash`; verify account availability before evaluation. Configure and deploy the Messenger functions using the next guide. No provider credentials belong in the mobile app.
 

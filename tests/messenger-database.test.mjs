@@ -81,7 +81,6 @@ await test('Messenger database boundaries and delivery recovery', async t => {
    assert.equal((await db.query('select used from public.daily_allocations where product_id=$1',[product])).rows[0].used,0);
    await intake(`CONFIRM ${summary.code}`);await finish(await svc('claim'));await send();
    assert.equal((await db.query('select count(*)::int n from public.orders')).rows[0].n,1);
-   assert.equal((await db.query("select to_regclass('public.test_orders') n")).rows[0].n,null);
    await command(staff,{op:'transition_order',business_id:bid,id:order.id,version:order.version,status:'accepted'});
    assert.equal((await db.query('select used from public.daily_allocations where product_id=$1',[product])).rows[0].used,1);
    const status=await send();assert.equal((await row('messenger_messages',status.job_id)).kind,'status');

@@ -35,7 +35,7 @@ Live Messenger intake, grounded replies, coded confirmation, owner inbox/takeove
 
 ## Live Messenger transport
 
-`messenger-ingest` authenticates a Page-specific connection secret, excludes echoes, and persists original event IDs before waking `messenger-worker`. The worker claims messages with expiring leases, uses shared grounding with live wording, and persists outbound jobs. Supabase Cron supplies one-minute recovery independently of the mobile app. The retired simulator tables are not present.
+`messenger-ingest` authenticates a Page-specific connection secret, excludes echoes, and persists original event IDs before waking `messenger-worker`. The worker claims messages with expiring leases, uses shared grounding with live wording, and persists outbound jobs. Supabase Cron supplies one-minute recovery independently of the mobile app.
 
 The outbound Zap must obtain single-use authorization from `messenger-dispatch` immediately before sending. It checks conversation revision, takeover, the 24-hour window, current sources, and current order status. Offered webhook jobs may be retried; authorized sends cannot. Provider callbacks record acceptance, not confirmed delivery. Unknown results block following sends until an owner reconciles them with evidence. A pause cannot retract a send already authorized.
 
@@ -68,11 +68,11 @@ Orders retain item-name and integer-centavo price snapshots. Backend totals do n
 
 ## Approved knowledge and grounded AI
 
-The owner maintains FAQs through Settings and the owner-only `knowledge_command` RPC. Updates check optimistic versions and keep immutable knowledge history; retries return their saved result. Existing knowledge survives simulator retirement.
+The owner maintains FAQs through Settings and the owner-only `knowledge_command` RPC. Updates check optimistic versions and keep immutable knowledge history; retries return their saved result.
 
 Messenger processing uses shared grounding under `supabase/functions/_shared/grounding.ts`. Replies use database values and exact approved excerpts, not free-form provider reply text. Product IDs, source versions, quantities, pickup times, and payment details are validated. Unsupported requests escalate to the owner. The application, not the model, checks customer confirmation codes.
 
-The old test-chat route, Edge Function, RPCs, evaluation traces, and simulated tables are removed. The historical baseline is kept unchanged; the retirement migration removes those objects on new and existing databases.
+This implemented grounding loads a bounded set of approved knowledge into Gemini context; it does not perform query-specific semantic retrieval or vector search. The thesis RAG requirement remains open. See the [Supabase RAG implementation brief](RAG.md) before describing this feature as complete RAG.
 
 ## Operational limits and retention
 

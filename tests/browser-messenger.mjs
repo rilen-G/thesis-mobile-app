@@ -48,7 +48,6 @@ try {
  await page.getByPlaceholder('owner@qfacio.test').fill('owner@test.invalid');
  await page.getByPlaceholder('Enter your password').fill('test-password');
  await page.getByRole('button',{name:'Sign In',exact:true}).click();
- await expect(page.getByRole('button',{name:'Open AI test chat',exact:true})).toHaveCount(0);
  await page.getByRole('button',{name:'Open Messenger inbox',exact:true}).click();
  await page.getByText(/Messenger backend setup is incomplete/).waitFor();
  await expect(page.getByText('No live conversations yet.',{exact:true})).toHaveCount(0);

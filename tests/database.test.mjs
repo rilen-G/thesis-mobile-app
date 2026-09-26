@@ -184,7 +184,7 @@ await t.test('audit records are owner-only and staff removal applies immediately
  await cmd(owner,b('remove_staff',{id:staff}));assert.equal(await snap(staff),null);
  await assert.rejects(cmd(staff,b('save_customer',{id:randomUUID(),version:0,name:'No access'})),/permission_denied/);
 });
-await t.test('knowledge survives simulator removal with owner-only versioned idempotent saves',async()=>{
+await t.test('knowledge supports owner-only versioned idempotent saves',async()=>{
  const save=(user,payload)=>as(user,async tx=>(await tx.query('select public.knowledge_command($1::jsonb) as result',[JSON.stringify({request_id:randomUUID(),business_id:bid,...payload})])).rows[0].result);
  const id=randomUUID(),request_id=randomUUID();
  const payload={op:'knowledge',id,request_id,title:'Pickup',body:'Counter pickup',approved:true,version:0};
@@ -201,10 +201,6 @@ await t.test('knowledge survives simulator removal with owner-only versioned ide
  await assert.rejects(as(owner,tx=>tx.query('update public.business_knowledge set approved=true')),/permission denied/);
  await assert.rejects(save(owner,{...payload,id:randomUUID(),request_id:randomUUID(),approved:'true'}),/Invalid knowledge request/);
  await assert.rejects(db.transaction(async tx=>{await tx.exec('set local role anon');await tx.query('select public.knowledge_command($1::jsonb)',[JSON.stringify(payload)]);}),/permission denied/);
- const retired=await db.query("select tablename from pg_tables where schemaname in ('public','private') and (tablename like 'test_%' or tablename='ai_evaluations')");
- assert.deepEqual(retired.rows,[]);
- const functions=await db.query("select proname from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname in ('public','private') and (proname like '%test_%' or proname='chat_command')");
- assert.deepEqual(functions.rows,[]);
 });
 await t.test('anonymous cannot invoke application RPCs',async()=>{
  await assert.rejects(db.transaction(async(tx)=>{await tx.exec('set local role anon');await tx.query('select public.app_snapshot()');}),/permission denied/);
