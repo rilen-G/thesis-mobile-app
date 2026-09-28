@@ -1,4 +1,4 @@
-import { parseInbound } from '../_shared/messenger-domain.ts';
+import { manychatInbound, parseInbound } from '../_shared/messenger-domain.ts';
 import { authenticate, readBody, respond, rpc, wakeWorker } from '../_shared/messenger-runtime.ts';
 
 Deno.serve(async (req: Request) => {
@@ -7,7 +7,7 @@ Deno.serve(async (req: Request) => {
     const connection = await authenticate(req);
     if (!connection) return respond({ error: 'Unauthorized' }, 401);
     let event;
-    try { event = parseInbound(await readBody(req)); } catch { return respond({ error: 'Invalid event. Check Zap field mappings.' }, 400); }
+    try { const body = await readBody(req); event = parseInbound(connection.transport === 'manychat' ? await manychatInbound(body) : body); } catch { return respond({ error: 'Invalid event. Check Zap field mappings.' }, 400); }
     const result = await rpc(connection, 'ingest', event);
     EdgeRuntime.waitUntil(wakeWorker());
     return respond(result);

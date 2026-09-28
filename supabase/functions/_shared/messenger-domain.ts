@@ -21,6 +21,16 @@ export function parseInbound(value: unknown): InboundEvent {
     timestamp: time.toISOString(), text: typeof p.text === 'string' ? p.text.normalize('NFC').trim() : '',
     is_echo: p.is_echo === true, unsupported: p.unsupported === true || typeof p.text !== 'string' };
 }
+export async function manychatInbound(p: Record<string, unknown>) {
+  const attachment = typeof p.last_input_text === 'string' && /^https?:\/\/\S+$/.test(p.last_input_text.trim());
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify([p.id, p.last_interaction, p.last_input_text])));
+  return { page_id: p.page_id, sender_id: p.id, event_id: 'manychat:' + Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, '0')).join(''),
+    timestamp: new Date().toISOString(), text: attachment ? undefined : p.last_input_text, unsupported: attachment };
+}
+export function manychatBody(subscriber_id: string, text: string) {
+  if (!/^\d{1,100}$/.test(subscriber_id)) throw new Error('invalid_identifier');
+  return `{"subscriber_id":${subscriber_id},"data":${JSON.stringify({ version: 'v2', content: { messages: [{ type: 'text', text }] } })}}`;
+}
 export function confirmationCode(text: string) {
   return /^CONFIRM ([A-Z0-9]{8})$/i.exec(text.trim())?.[1].toUpperCase() ?? null;
 }

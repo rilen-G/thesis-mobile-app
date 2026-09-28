@@ -17,6 +17,13 @@ Deno.test('webhook credentials are bound to one configured connection', async ()
     assert(!await equalSecret('', ''));
     Deno.env.set('MESSENGER_CONNECTIONS', '[{"id":"bad","secret":"short","hook_url":"http://localhost"}]');
     await rejects(connections);
+    const manychat = { id, secret, transport: 'manychat', api_key: 'key' };
+    Deno.env.set('MESSENGER_CONNECTIONS', JSON.stringify([manychat]));
+    assert(connections()[0].transport === 'manychat');
+    for (const value of [{ ...manychat, api_key: '' }, { ...manychat, transport: 'other', hook_url: 'https://hooks.zapier.com/hooks/catch/1/test/' }, { id, secret, hook_url: 'https://example.invalid/' }]) {
+      Deno.env.set('MESSENGER_CONNECTIONS', JSON.stringify([value]));
+      await rejects(connections);
+    }
   } finally { if (previous === undefined) Deno.env.delete('MESSENGER_CONNECTIONS'); else Deno.env.set('MESSENGER_CONNECTIONS', previous); }
 });
 Deno.test('JSON request reading rejects oversized and non-object payloads', async () => {

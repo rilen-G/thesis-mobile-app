@@ -3,14 +3,15 @@ import { validHookUrl } from './messenger-domain.ts';
 
 declare global { const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void }; }
 
-export type ConnectionConfig = { id: string; secret: string; hook_url: string };
+export type ConnectionConfig = { id: string; secret: string; hook_url?: string; transport?: 'manychat'; api_key?: string };
 export function connections(): ConnectionConfig[] {
   const values: unknown = JSON.parse(Deno.env.get('MESSENGER_CONNECTIONS') || '[]');
   if (!Array.isArray(values)) throw new Error('configuration');
   const seen = new Set<string>();
   for (const value of values) {
     if (!value || typeof value.id !== 'string' || !/^[0-9a-f-]{36}$/i.test(value.id) || seen.has(value.id) ||
-      typeof value.secret !== 'string' || value.secret.length < 32 || !validHookUrl(value.hook_url)) throw new Error('configuration');
+      typeof value.secret !== 'string' || value.secret.length < 32 ||
+      !(value.transport === 'manychat' ? typeof value.api_key === 'string' && value.api_key.length > 0 : value.transport === undefined && validHookUrl(value.hook_url))) throw new Error('configuration');
     seen.add(value.id);
   }
   return values;

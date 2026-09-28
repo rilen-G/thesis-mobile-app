@@ -1,5 +1,5 @@
 import { schema, normalizeMessage, type Context } from '../_shared/grounding.ts';
-import { confirmationCode, liveReply, LIVE_SYSTEM_PROMPT } from '../_shared/messenger-domain.ts';
+import { confirmationCode, liveReply, manychatBody, LIVE_SYSTEM_PROMPT } from '../_shared/messenger-domain.ts';
 import { connections, equalSecret, respond, rpc, type ConnectionConfig } from '../_shared/messenger-runtime.ts';
 
 type Work = { message: { id: string; body: string; processing_token: string }; probe: boolean;
@@ -28,6 +28,15 @@ async function process(connection: ConnectionConfig, work: Work) {
     await finish({ body: reply.body, draft: reply.draft, sources: reply.sources, attention: reply.outcome === 'escalated' });
   } catch { await finish({ error: 'ai_unavailable' }); }
 }
+async function sendManychat(connection: ConnectionConfig, attempt_id: string) {
+  const auth = await rpc<{ allowed: boolean; text: string; recipient_id: string }>(connection, 'authorize', { attempt_id });
+  if (!auth.allowed) return;
+  const response = await fetch('https://api.manychat.com/fb/sending/sendContent', { method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${connection.api_key}` },
+    body: manychatBody(auth.recipient_id, auth.text), signal: AbortSignal.timeout(8000), redirect: 'error' }).catch(() => null);
+  const accepted = response?.ok && (await response.json().catch(() => null))?.status === 'success';
+  await rpc(connection, 'result', { attempt_id, outcome: accepted ? 'accepted' : 'unknown' });
+}
 async function drain() {
   const started = Date.now();
   for (const connection of connections()) {
@@ -36,9 +45,10 @@ async function drain() {
       const work = await rpc<Work | null>(connection, 'claim');
       if (work) await process(connection, work);
       const offer = await rpc<{ attempt_id: string } | null>(connection, 'offer');
-      if (offer) {
+      if (offer && connection.transport === 'manychat') await sendManychat(connection, offer.attempt_id);
+      else if (offer) {
         try {
-          const response = await fetch(connection.hook_url, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          const response = await fetch(connection.hook_url!, { method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(offer), signal: AbortSignal.timeout(8000), redirect: 'error' });
           if (!response.ok) throw new Error('hook');
         } catch { await rpc(connection, 'offer_failed', { attempt_id: offer.attempt_id }); }

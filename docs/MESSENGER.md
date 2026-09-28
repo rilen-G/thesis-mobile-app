@@ -80,6 +80,16 @@ Open **Dashboard → Messenger inbox** (also linked from Settings). Send a new m
 
 Exercise menu inquiries, a pickup order, `CONFIRM <8-character code>`, and staff acceptance/ready/received. Codes expire after 30 minutes or pickup time, whichever is earlier. Corrections invalidate old codes. A confirmed order reserves no quantity; staff acceptance performs the normal atomic allocation checks. After confirmation, further concerns are flagged for the owner rather than modifying the order automatically.
 
+## ManyChat alternative
+
+A Page uses either Zapier or ManyChat (Pro plan), never both. Sections 2 and 5 apply unchanged, except that `probe_sender_id` is the tester's ManyChat contact ID, not a PSID. Zaps A and B are not used.
+
+In `MESSENGER_CONNECTIONS`, a ManyChat entry replaces `hook_url` with `"transport":"manychat"` and the Page's ManyChat API key: `{"id":"<connection UUID>","secret":"<random 32+ character secret>","transport":"manychat","api_key":"<ManyChat API key>"}`.
+
+Incoming: in ManyChat, add a **Default Reply** (every time) whose flow contains only an **External Request** action: POST to `https://<project>.supabase.co/functions/v1/messenger-ingest` with headers `Content-Type: application/json`, `x-messenger-connection`, and `x-messenger-secret`, and body **Full Contact Data**. Do not use a custom body: ManyChat does not escape inserted text containing quotes or line breaks. `messenger-ingest` keeps only `page_id`, `id` (sender), and `last_input_text`, and discards all other contact fields. ManyChat supplies no message ID, so the event ID is a hash of contact ID, `last_interaction`, and text; the server receive time is used for ordering. A message that is only a URL (a photo or attachment) is stored as an unsupported placeholder for owner review; the URL is not kept. Keyword and other ManyChat automations take precedence over the Default Reply and bypass intake.
+
+Outgoing: the worker authorizes each attempt, sends it through ManyChat `POST /fb/sending/sendContent` without a message tag, and records `accepted` only when ManyChat returns `status: success`. Any other result is unknown and requires owner reconciliation. `messenger-dispatch` rejects ManyChat connections.
+
 ## Operating and acceptance limits
 
 - Owners alone see conversations and control takeover. Staff retain operational order access. No read receipts or push notifications are implemented.
