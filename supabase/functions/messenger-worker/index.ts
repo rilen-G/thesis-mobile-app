@@ -16,11 +16,16 @@ async function process(connection: ConnectionConfig, work: Work) {
       allocations: work.allocations, today, opening: work.business.opening_time, cutoff: work.business.cutoff_time, now: now.toISOString() };
     const history = work.history.map(m => ({ ...m, body: normalizeMessage(m.body) }));
     const model = Deno.env.get('GEMINI_MODEL') || 'gemini-2.5-flash';
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-      body: JSON.stringify({ systemInstruction: { parts: [{ text: LIVE_SYSTEM_PROMPT }] }, contents: [{ role: 'user', parts: [{ text: JSON.stringify({ context: ctx, history }) }] }],
-        generationConfig: { responseMimeType: 'application/json', responseJsonSchema: schema, temperature: 0, maxOutputTokens: 2048 } }), signal: AbortSignal.timeout(25000),
-    });
+    const body = JSON.stringify({ systemInstruction: { parts: [{ text: LIVE_SYSTEM_PROMPT }] }, contents: [{ role: 'user', parts: [{ text: JSON.stringify({ context: ctx, history }) }] }],
+      generationConfig: { responseMimeType: 'application/json', responseJsonSchema: schema, temperature: 0, maxOutputTokens: 2048 } });
+    const generate = async () => {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key }, body, signal: AbortSignal.timeout(20000) });
+      if (!response.ok) console.error('gemini_failed', response.status);
+      return response;
+    };
+    let response = await generate();
+    if (response.status === 429 || response.status === 503) { await new Promise(resolve => setTimeout(resolve, 2000)); response = await generate(); }
     if (!response.ok) throw new Error('provider');
     const generated = await response.json();
     const raw = generated.candidates?.[0]?.content?.parts?.map((part: { text?: string }) => part.text || '').join('');
