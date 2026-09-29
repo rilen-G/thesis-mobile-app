@@ -17,7 +17,7 @@ async function process(connection: ConnectionConfig, work: Work) {
     const history = work.history.map(m => ({ ...m, body: normalizeMessage(m.body) }));
     const model = Deno.env.get('GEMINI_MODEL') || 'gemini-2.5-flash';
     const body = JSON.stringify({ systemInstruction: { parts: [{ text: LIVE_SYSTEM_PROMPT }] }, contents: [{ role: 'user', parts: [{ text: JSON.stringify({ context: ctx, history }) }] }],
-      generationConfig: { responseMimeType: 'application/json', responseJsonSchema: schema, temperature: 0, maxOutputTokens: 2048 } });
+      generationConfig: { responseMimeType: 'application/json', responseJsonSchema: schema, temperature: 0, maxOutputTokens: 8192 } });
     const generate = async () => {
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
         method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key }, body, signal: AbortSignal.timeout(20000) });
@@ -28,10 +28,16 @@ async function process(connection: ConnectionConfig, work: Work) {
     if (response.status === 429 || response.status === 503) { await new Promise(resolve => setTimeout(resolve, 2000)); response = await generate(); }
     if (!response.ok) throw new Error('provider');
     const generated = await response.json();
-    const raw = generated.candidates?.[0]?.content?.parts?.map((part: { text?: string }) => part.text || '').join('');
-    const reply = liveReply(JSON.parse(raw), ctx);
+    const candidate = generated.candidates?.[0];
+    const raw = candidate?.content?.parts?.map((part: { text?: string }) => part.text || '').join('');
+    let extraction;
+    try { extraction = JSON.parse(raw); } catch { console.error('gemini_unusable', candidate?.finishReason, generated.usageMetadata?.thoughtsTokenCount); throw new Error('provider'); }
+    const reply = liveReply(extraction, ctx);
     await finish({ body: reply.body, draft: reply.draft, sources: reply.sources, attention: reply.outcome === 'escalated' });
-  } catch { await finish({ error: 'ai_unavailable' }); }
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'TimeoutError') console.error('gemini_timeout');
+    await finish({ error: 'ai_unavailable' });
+  }
 }
 async function sendManychat(connection: ConnectionConfig, attempt_id: string) {
   const auth = await rpc<{ allowed: boolean; text: string; recipient_id: string }>(connection, 'authorize', { attempt_id });
