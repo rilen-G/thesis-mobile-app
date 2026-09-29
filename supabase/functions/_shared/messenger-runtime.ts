@@ -45,7 +45,7 @@ export const respond = (body: unknown, status = 200) => new Response(JSON.string
 export async function rpc<T>(connection: ConnectionConfig, op: string, payload: Record<string, unknown> = {}): Promise<T> {
   const client = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } });
   const { data, error } = await client.rpc('messenger_service', { payload: { ...payload, op, connection_id: connection.id } });
-  if (error) throw new Error('database_operation_failed');
+  if (error) throw new Error(/^[a-z_]+$/.test(error.message) ? error.message : 'database_operation_failed');
   return data as T;
 }
 export async function wakeWorker() {

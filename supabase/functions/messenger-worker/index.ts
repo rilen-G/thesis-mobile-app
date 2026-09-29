@@ -35,7 +35,9 @@ async function process(connection: ConnectionConfig, work: Work) {
     const reply = liveReply(extraction, ctx);
     await finish({ body: reply.body, draft: reply.draft, sources: reply.sources, attention: reply.outcome === 'escalated' });
   } catch (error) {
-    if (error instanceof DOMException && error.name === 'TimeoutError') console.error('gemini_timeout');
+    const name = error instanceof Error ? error.name : 'unknown';
+    if (name === 'TimeoutError') console.error('gemini_timeout');
+    console.error('worker_process_failed', name, error instanceof Error && /^[a-z_]+$/.test(error.message) ? error.message : '');
     await finish({ error: 'ai_unavailable' });
   }
 }
