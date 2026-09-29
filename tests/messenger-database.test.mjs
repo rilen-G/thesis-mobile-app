@@ -72,12 +72,17 @@ await test('Messenger database boundaries and delivery recovery', async t => {
    await command(owner,{op:'save_product',business_id:bid,id:product,version:0,name:'Coffee',price_centavos:15000,active:true});
    const day=(await db.query("select (now() at time zone 'Asia/Manila')::date::text as business_day")).rows[0].business_day;pickup=`${day}T23:59:00+08:00`;
    await command(owner,{op:'set_allocation',business_id:bid,id:product,version:0,business_date:day,total:2,reason:'test'});
+   await command(owner,{op:'save_product',business_id:bid,id:randomUUID(),version:0,name:'Tea',price_centavos:9000,active:true});
+   await as(owner,tx=>tx.query('select public.knowledge_command($1)',[{op:'knowledge',business_id:bid,id:randomUUID(),request_id:randomUUID(),version:0,title:'Pickup',body:'Collect at the counter.',approved:true}]));
    await intake('one coffee');const work=await svc('claim');
+   assert.equal(work.history.at(-1).body,'one coffee');assert.ok(work.history.every(m=>typeof m.body==='string'));
+   assert.equal(work.knowledge[0].body,'Collect at the counter.');assert.equal(work.allocations[0].total,2);
    const reply=await finish(work,{body:'Review coffee',sources:[{id:product,version:1}],draft:{items:[{product_id:product,quantity:1}],pickup_at:pickup,payment_method:'cash'}});
    await send();const summary=(await db.query('select * from public.messenger_summaries where message_id=$1',[reply.id])).rows[0];
    await intake(`CONFIRM ${summary.code}`);await finish(await svc('claim'));await send();
    const saved=await row('messenger_summaries',summary.id);assert.ok(saved.order_id);
    const order=await row('orders',saved.order_id);assert.equal(order.status,'confirmed');assert.equal(Number(order.total_centavos),15000);
+   assert.deepEqual((await db.query('select product_id,name,quantity from public.order_items where order_id=$1',[order.id])).rows,[{product_id:product,name:'Coffee',quantity:1}]);
    assert.equal((await db.query('select used from public.daily_allocations where product_id=$1',[product])).rows[0].used,0);
    await intake(`CONFIRM ${summary.code}`);await finish(await svc('claim'));await send();
    assert.equal((await db.query('select count(*)::int n from public.orders')).rows[0].n,1);
