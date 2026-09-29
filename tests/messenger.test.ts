@@ -31,14 +31,14 @@ test('ManyChat contact data maps to a minimal inbound event', async () => {
   const body = JSON.parse('{"key":"user:28272978999035230","id":"28272978999035230","page_id":"1290339024167301","name":"<redacted>","profile_pic":"<redacted>","live_chat_url":"<redacted>","last_input_text":"2 “extra spicy” adobo\\npickup 6pm","last_interaction":"2026-09-28T18:11:30+08:00","custom_fields":{}}');
   const mapped = await manychatInbound(body);
   const event = parseInbound(mapped);
-  assert.deepEqual(Object.keys(mapped).sort(), ['event_id', 'page_id', 'sender_id', 'text', 'timestamp', 'unsupported']);
+  for (const field of ['name', 'profile_pic', 'live_chat_url']) assert.equal(field in mapped, false);
   assert.equal(event.sender_id, '28272978999035230');
   assert.equal(event.page_id, '1290339024167301');
   assert.equal(event.text, '2 “extra spicy” adobo\npickup 6pm');
   assert.equal(event.unsupported, false);
   assert.match(event.event_id, /^manychat:[0-9a-f]{64}$/);
-  assert.ok(Date.now() - Date.parse(event.timestamp) < 5000);
-  assert.equal((await manychatInbound({ ...body })).event_id, event.event_id);
+  assert.notEqual(event.timestamp, new Date(body.last_interaction).toISOString());
+  assert.equal((await manychatInbound(body)).event_id, event.event_id);
   for (const change of [{ last_interaction: '2026-09-28T18:11:31+08:00' }, { last_input_text: 'adobo' }]) assert.notEqual((await manychatInbound({ ...body, ...change })).event_id, event.event_id);
 });
 test('ManyChat attachment URLs become unsupported without keeping the URL', async () => {

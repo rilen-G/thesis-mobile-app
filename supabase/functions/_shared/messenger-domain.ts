@@ -25,7 +25,7 @@ export async function manychatInbound(p: Record<string, unknown>) {
   const attachment = typeof p.last_input_text === 'string' && /^https?:\/\/\S+$/.test(p.last_input_text.trim());
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify([p.id, p.last_interaction, p.last_input_text])));
   return { page_id: p.page_id, sender_id: p.id, event_id: 'manychat:' + Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, '0')).join(''),
-    timestamp: new Date().toISOString(), text: attachment ? undefined : p.last_input_text, unsupported: attachment };
+    timestamp: new Date().toISOString(), text: attachment ? undefined : p.last_input_text };
 }
 export function manychatBody(subscriber_id: string, text: string) {
   if (!/^\d{1,100}$/.test(subscriber_id)) throw new Error('invalid_identifier');
