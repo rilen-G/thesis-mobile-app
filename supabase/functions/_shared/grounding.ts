@@ -47,7 +47,8 @@ export function groundedReply(raw:unknown, ctx:Context):{body:string;draft:Draft
  if(e.intent==='order') {
   if(!e.items.length||e.clarification==='product') return ask('Which item from the menu would you like?','Ano pong item sa menu ang gusto niyo?');
   if(e.clarification==='quantity'||e.items.some(i=>i.quantity===null)) return ask('How many of each item?','Ilan po sa bawat item?');
-  if(e.items.some(i=>stock(i.product_id)<i.quantity)) return ask('Sorry, there is not enough left for this order. Please choose fewer items or message the owner.','Sorry po, kulang na ang available para sa order na ito. Pakibawasan po, o i-message ang owner.');
+  const short=e.items.find(i=>stock(i.product_id)<i.quantity);
+  if(short){const left=Math.max(stock(short.product_id),0),name=products.find(p=>p.id===short.product_id)!.name;return left?ask(`Sorry, only ${left} left of ${name}. Would you like to order ${left} instead?`,`Pasensya na po, ${left} na lang po ang available na ${name}. ${left} na lang po ba ang order niyo?`):ask(`Sorry, ${name} is sold out today.`,`Pasensya na po, sold out na po ang ${name} ngayon.`);}
   const now=minutes(new Date(Date.parse(ctx.now)+288e5).toISOString().slice(11,16)),first=minutes(ctx.opening),last=minutes(ctx.cutoff);
   if(now>=last) return ask(`Sorry, pickups are closed for today (until ${close}). Please message us again tomorrow.`,`Sorry po, sarado na ang pickup for today (hanggang ${close} lang). Message po ulit kayo bukas.`);
   if(e.pickup_day==='other') return ask(`We only take same-day pickup. What time today, between ${open} and ${close}?`,`Same-day pickup lang po kami. Anong oras po today, from ${open} to ${close}?`);
