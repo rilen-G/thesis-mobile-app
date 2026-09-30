@@ -30,8 +30,10 @@ export function groundedReply(raw:unknown, ctx:Context):{body:string;draft:Draft
  const stock=(id:string)=>{const a=ctx.allocations.find(a=>a.product_id===id);return a?a.total-a.used:0;};
  const money=(c:number)=>`₱${(c/100).toFixed(2)}`;
  if(e.intent==='escalate') return fallback('escalate_intent');
- const open=ctx.opening.slice(0,5),close=ctx.cutoff.slice(0,5);
- if(e.intent==='hours') return {body:fil?`Open po kami from ${open} to ${close} (Manila time).`:`We're open ${open}–${close} (Manila time).`,draft:null,sources:ctx.business_id?[{id:ctx.business_id,version:ctx.business_version!}]:[],outcome:'validated',language};
+ const minutes=(t:string)=>Number(t.slice(0,2))*60+Number(t.slice(3,5));
+ const clock=(t:number,full=false)=>`${Math.floor(t/60)%12||12}${full||t%60?`:${String(t%60).padStart(2,'0')}`:''} ${t<720?'AM':'PM'}`;
+ const open=clock(minutes(ctx.opening)),close=clock(minutes(ctx.cutoff));
+ if(e.intent==='hours') return {body:fil?`Open po kami ${open} – ${close} (Manila time).`:`We're open ${open} – ${close} (Manila time).`,draft:null,sources:ctx.business_id?[{id:ctx.business_id,version:ctx.business_version!}]:[],outcome:'validated',language};
  if(e.intent==='menu') {
   const selected=(e.product_ids.length?products.filter(p=>e.product_ids.includes(p.id)):products).slice(0,20);
   return {body:selected.length?selected.map(p=>`${p.name}: ${money(p.price_centavos)} · ${stock(p.id)} ${fil?'pa ang available':'available online'}`).join('\n'):fil?'Wala pa pong available na items ngayon.':'No items are available right now.',draft:null,sources:selected.map(p=>({id:p.id,version:p.version})),outcome:'validated',language};
@@ -43,7 +45,7 @@ export function groundedReply(raw:unknown, ctx:Context):{body:string;draft:Draft
   if(e.clarification==='quantity'||e.items.some(i=>i.quantity===null)) return ask('How many of each item?','Ilan po sa bawat item?');
   if(e.items.some(i=>stock(i.product_id)<i.quantity)) return ask('Sorry, there is not enough left for this order. Please choose fewer items or message the owner.','Sorry po, kulang na ang available para sa order na ito. Pakibawasan po, o i-message ang owner.');
   if(new Date(Date.parse(ctx.now)+288e5).toISOString().slice(11,19)>=ctx.cutoff) return ask(`Sorry, pickups are closed for today (until ${close}). Please message us again tomorrow.`,`Sorry po, sarado na ang pickup for today (hanggang ${close} lang). Message po ulit kayo bukas.`);
-  if(typeof e.pickup_at!=='string'||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?\+08:00$/.test(e.pickup_at)||!Number.isFinite(Date.parse(e.pickup_at))) return ask(`What time will you pick up today? We're open ${open}–${close}.`,`Anong oras po kayo magpi-pickup today? Open kami ${open}–${close}.`);
+  if(typeof e.pickup_at!=='string'||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?\+08:00$/.test(e.pickup_at)||!Number.isFinite(Date.parse(e.pickup_at))) return ask(`What time will you pick up today? We're open ${open} – ${close}.`,`Anong oras po kayo magpi-pickup today? Open kami ${open} – ${close}.`);
   const time=e.pickup_at.slice(11,19);
   if(e.pickup_at.slice(0,10)!==ctx.today) return ask(`We only take same-day pickup. What time today, between ${open} and ${close}?`,`Same-day pickup lang po kami. Anong oras po today, from ${open} to ${close}?`);
   if(Date.parse(e.pickup_at)<=Date.parse(ctx.now)) return ask(`That time has already passed. What time later today, until ${close}?`,`Lumipas na po ang oras na iyan. Anong oras po mamaya, hanggang ${close}?`);
@@ -52,7 +54,7 @@ export function groundedReply(raw:unknown, ctx:Context):{body:string;draft:Draft
   if(typeof e.payment_method!=='string'||!e.payment_method.trim()||e.payment_method.trim().length>80) return ask('Will you pay cash or GCash on pickup?','Cash po ba o GCash ang bayad pag-pickup?');
   const total=e.items.reduce((s,i)=>s+products.find(p=>p.id===i.product_id)!.price_centavos*i.quantity,0);
   const draft={items:e.items,pickup_at:e.pickup_at,payment_method:e.payment_method.trim()};
-  return {body:`${fil?'Pakicheck po ng order niyo':'Please check your order'}:\n${e.items.map(i=>`${i.quantity} × ${products.find(p=>p.id===i.product_id)!.name}`).join('\n')}\n${money(total)} · pickup ${e.pickup_at.slice(11,16)} · ${draft.payment_method}`,draft,sources:e.items.map(i=>({id:i.product_id,version:products.find(p=>p.id===i.product_id)!.version})),outcome:'validated',language};
+  return {body:`${fil?'Pakicheck po ng order niyo':'Please check your order'}:\n${e.items.map(i=>`${i.quantity} × ${products.find(p=>p.id===i.product_id)!.name}`).join('\n')}\n${money(total)} · pickup ${clock(minutes(e.pickup_at.slice(11,16)),true)} · ${draft.payment_method}`,draft,sources:e.items.map(i=>({id:i.product_id,version:products.find(p=>p.id===i.product_id)!.version})),outcome:'validated',language};
  }
  return ask('Could you tell me which item, how many, or what you would like to ask?','Pakisabi po kung anong item, ilan, o ano ang tanong niyo.');
 }
