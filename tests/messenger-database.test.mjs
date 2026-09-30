@@ -219,5 +219,15 @@ await test('Messenger database boundaries and delivery recovery', async t => {
    await finish(next,{body:'Checking your confirmation.',confirm_code:summary.code});await send();
    assert.equal((await row('messenger_summaries',summary.id)).order_id,null);
   });
+  await t.test('a new order while another is active gets its own summary, order, and notices',async()=>{
+   const place=async()=>{await intake('coffee',{sender_id:'322'});const work=await svc('claim');
+    const reply=await finish(work,{body:'Please check your order',sources:[{id:product,version:(await row('products',product)).version}],draft:{items:[{product_id:product,quantity:1}],pickup_at:pickup,payment_method:'cash'}});await send();
+    const summary=(await db.query('select * from public.messenger_summaries where message_id=$1',[reply.id])).rows[0];assert.ok(summary);
+    await intake('CONFIRM '+summary.code,{sender_id:'322'});await finish(await svc('claim'));await send();
+    return (await row('messenger_summaries',summary.id)).order_id;};
+   const first=await place();const second=await place();assert.ok(first&&second&&first!==second);
+   const order=await row('orders',first);await command(staff,{op:'transition_order',business_id:bid,id:first,version:order.version,status:'rejected',reason:'test'});
+   assert.equal((await db.query("select count(*)::int n from public.messenger_messages where order_id=$1 and kind='status'",[first])).rows[0].n,1);await send();
+  });
  } finally { await db.close(); }
 });
