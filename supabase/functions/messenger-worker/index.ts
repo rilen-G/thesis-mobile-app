@@ -33,6 +33,7 @@ async function process(connection: ConnectionConfig, work: Work) {
     let extraction;
     try { extraction = JSON.parse(raw); } catch { console.error('gemini_unusable', candidate?.finishReason, generated.usageMetadata?.thoughtsTokenCount); throw new Error('provider'); }
     const reply = liveReply(extraction, ctx);
+    if (reply.reason) console.error('reply_escalated', reply.reason);
     await finish({ body: reply.body, draft: reply.draft, sources: reply.sources, attention: reply.outcome === 'escalated', language: reply.language });
   } catch (error) {
     const name = error instanceof Error ? error.name : 'unknown';
