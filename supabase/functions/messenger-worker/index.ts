@@ -46,10 +46,14 @@ async function process(connection: ConnectionConfig, work: Work) {
 async function sendManychat(connection: ConnectionConfig, attempt_id: string) {
   const auth = await rpc<{ allowed: boolean; text: string; recipient_id: string; page_id: string; code: string | null; language: string | null }>(connection, 'authorize', { attempt_id });
   if (!auth.allowed) return;
+  const chips = auth.code ? confirmChips(`${Deno.env.get('SUPABASE_URL')}/functions/v1/messenger-ingest`, connection, { ...auth, code: auth.code }) : [];
   const response = await fetch('https://api.manychat.com/fb/sending/sendContent', { method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${connection.api_key}` },
-    body: manychatBody(auth.recipient_id, auth.text, auth.code ? confirmChips(`${Deno.env.get('SUPABASE_URL')}/functions/v1/messenger-ingest`, connection, { ...auth, code: auth.code }) : []), signal: AbortSignal.timeout(8000), redirect: 'error' }).catch(() => null);
-  const accepted = response?.ok && (await response.json().catch(() => null))?.status === 'success';
+    body: manychatBody(auth.recipient_id, auth.text, chips), signal: AbortSignal.timeout(8000), redirect: 'error' }).catch(() => null);
+  const raw = response ? await response.text().catch(() => '') : '';
+  const result = await Promise.resolve().then(() => JSON.parse(raw)).catch(() => null);
+  console.log('manychat_send', response?.status ?? 'network_error', result?.status ?? null, result?.code ?? null, auth.text.length, chips.length > 0, raw === '{"status":"success"}' ? '' : raw.slice(0, 2000));
+  const accepted = response?.ok && result?.status === 'success';
   await rpc(connection, 'result', { attempt_id, outcome: accepted ? 'accepted' : 'unknown' });
 }
 async function drain() {
