@@ -187,7 +187,9 @@ await test('Messenger database boundaries and delivery recovery', async t => {
     await command(staff,{op:'transition_order',business_id:bid,id:order.id,version:order.version,status,reason:'test'});
     assert.equal(await used(),start);
     const notice=(await db.query("select body from public.messenger_messages where order_id=$1 and kind='status'",[order.id])).rows[0];
-    assert.match(notice.body,status==='rejected'?/Pasensya na po/:/Expired na po/);await send();
+    if(status==='rejected'){assert.equal(notice.body,'Pasensya na po, hindi po namin ma-accommodate ang order niyo: test');assert.equal((await row('orders',order.id)).rejection_reason,'test');}
+    else assert.match(notice.body,/Expired na po/);
+    await send();
    }
   });
   await t.test('typed yes confirms and unclear replies re-ask without invalidating the pending summary',async()=>{
@@ -203,7 +205,9 @@ await test('Messenger database boundaries and delivery recovery', async t => {
    work=await svc('claim');assert.equal(work.message.error_code,'unsupported_message');assert.equal(work.summary.code,summary.code);await finish(work,{body:'Would you like to confirm this order?'});await send();
    await intake('oo po',{sender_id:'320',reply_kind:'yes'});work=await svc('claim');
    await finish(work,{body:'Checking your confirmation.',confirm_code:work.summary.code});
-   assert.ok((await row('messenger_summaries',summary.id)).order_id);await send();
+   const orderId=(await row('messenger_summaries',summary.id)).order_id;assert.ok(orderId);await send();
+   for(const next of ['accepted','ready','completed']) {const current=await row('orders',orderId);await command(staff,{op:'transition_order',business_id:bid,id:orderId,version:current.version,status:next});await send();}
+   assert.equal((await db.query("select body from public.messenger_messages where order_id=$1 and kind='status' order by seq desc limit 1",[orderId])).rows[0].body,'Thank you for picking up your order!');
   });
   await t.test('an edited order invalidates the old summary so its code can no longer confirm',async()=>{
    await db.query('update public.daily_allocations set total=total+5 where product_id=$1',[product]);
