@@ -3,7 +3,7 @@ import { confirmationCode, liveReply, manychatBody, LIVE_SYSTEM_PROMPT } from '.
 import { connections, equalSecret, respond, rpc, type ConnectionConfig } from '../_shared/messenger-runtime.ts';
 
 type Work = { message: { id: string; body: string; processing_token: string }; probe: boolean;
-  conversation: { order_id: string | null }; business: { id: string; version: number; opening_time: string; cutoff_time: string };
+  conversation: { order_id: string | null; reply_language?: 'en' | 'taglish' | null }; business: { id: string; version: number; opening_time: string; cutoff_time: string };
   products: Context['products']; knowledge: Context['knowledge']; allocations: Context['allocations']; history: { role: string; body: string }[] };
 async function process(connection: ConnectionConfig, work: Work) {
   const finish = (values: Record<string, unknown>) => rpc(connection, 'finish', { message_id: work.message.id,
@@ -13,7 +13,7 @@ async function process(connection: ConnectionConfig, work: Work) {
     const key = Deno.env.get('GEMINI_API_KEY'); if (!key) throw new Error('configuration');
     const now = new Date(); const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
     const ctx: Context = { business_id: work.business.id, business_version: work.business.version, products: work.products, knowledge: work.knowledge,
-      allocations: work.allocations, today, opening: work.business.opening_time, cutoff: work.business.cutoff_time, now: now.toISOString() };
+      allocations: work.allocations, today, opening: work.business.opening_time, cutoff: work.business.cutoff_time, now: now.toISOString(), language: work.conversation.reply_language };
     const history = work.history.map(m => ({ ...m, body: normalizeMessage(m.body) }));
     const model = Deno.env.get('GEMINI_MODEL') || 'gemini-2.5-flash';
     const body = JSON.stringify({ systemInstruction: { parts: [{ text: LIVE_SYSTEM_PROMPT }] }, contents: [{ role: 'user', parts: [{ text: JSON.stringify({ context: ctx, history }) }] }],
@@ -33,7 +33,7 @@ async function process(connection: ConnectionConfig, work: Work) {
     let extraction;
     try { extraction = JSON.parse(raw); } catch { console.error('gemini_unusable', candidate?.finishReason, generated.usageMetadata?.thoughtsTokenCount); throw new Error('provider'); }
     const reply = liveReply(extraction, ctx);
-    await finish({ body: reply.body, draft: reply.draft, sources: reply.sources, attention: reply.outcome === 'escalated' });
+    await finish({ body: reply.body, draft: reply.draft, sources: reply.sources, attention: reply.outcome === 'escalated', language: reply.language });
   } catch (error) {
     const name = error instanceof Error ? error.name : 'unknown';
     console.error('worker_process_failed', name, error instanceof Error && /^[a-z_]+$/.test(error.message) ? error.message : '');
