@@ -14,7 +14,7 @@ import { StatusBadge } from '@/features/orders/status-badge';
 import { useOperations } from '@/state/operations';
 import { colors, fonts, radii, textStyles } from '@/theme/tokens';
 import { filterMenu, menuAvailability, menuCategories, money, statusLabel, type MenuCategory, type OrderRecord, type Status } from './domain';
-import { Copy, DataScreen, ProductPhoto, useMutation } from './ui';
+import { Copy, DataScreen, ProductPhoto, RejectStep, useMutation } from './ui';
 
 function Label({ children, color = colors.ink }: { children: ReactNode; color?: string }) {
   return <Text style={[styles.label, { color, flexShrink: 1 }]}>{children}</Text>;
@@ -81,18 +81,20 @@ export function Orders() {
 function OrderCard({ order }: { order: OrderRecord }) {
   const { data } = useOperations();
   const mutation = useMutation();
+  const [rejecting, setRejecting] = useState(false);
   const customer = data?.customers.find((item) => item.id === order.customer_id);
   const items = data?.items.filter((item) => item.order_id === order.id) ?? [];
   const transition = order.status === 'confirmed' ? 'accepted' : order.status === 'accepted' ? 'ready' : order.status === 'ready' ? 'completed' : null;
   const actionLabel = transition === 'accepted' ? 'Accept' : transition === 'ready' ? 'Ready' : transition === 'completed' ? 'Received' : '';
   const open = () => router.push({ pathname: '/(owner)/order/[id]', params: { id: order.id } });
-  const saveStatus = (status: Status) => mutation.run({ op: 'transition_order', business_id: order.business_id, id: order.id, version: order.version, status, reason: status === 'rejected' ? 'Rejected by staff' : '' });
+  const saveStatus = (status: Status) => mutation.run({ op: 'transition_order', business_id: order.business_id, id: order.id, version: order.version, status });
   return <Pressable onPress={open}><Card style={styles.orderCard}>
     <View style={styles.statusFloat}><StatusBadge status={order.status} label={statusLabel[order.status]} /></View>
     <View style={{ paddingRight: 94 }}><Text style={styles.orderId}>#{order.id.slice(0, 8).toUpperCase()}</Text><Text style={styles.orderCustomer}>{customer?.name ?? 'Customer'}</Text><View style={styles.inline}><ShoppingBag color={colors.terracotta} size={14} /><Text style={styles.smallCopy}>Pickup</Text></View></View>
     <View style={styles.itemsSection}><Label>Items</Label>{items.map((item) => <View key={item.id} style={styles.itemRow}><Text style={styles.itemQty}>{item.quantity}×</Text><Text numberOfLines={1} style={styles.itemName}>{item.name}</Text><Text style={styles.itemPrice}>{money(item.price_centavos * item.quantity)}</Text></View>)}</View>
     <View style={styles.detailLines}><Label>Order Details</Label><View style={styles.inline}><WalletCards color={colors.subtleText} size={14} /><Text style={[styles.smallCopy, styles.flexOne]}><Text style={styles.bold}>Payment:</Text> {order.payment_method}</Text></View><View style={styles.inline}><Clock3 color={colors.subtleText} size={14} /><Text style={[styles.smallCopy, styles.flexOne]}><Text style={styles.bold}>Pick up time:</Text> {valueDate(order.pickup_at)}</Text></View>{order.notes ? <View style={styles.inline}><MessageSquareText color={colors.subtleText} size={14} /><Text style={[styles.smallCopy, styles.flexOne]}>{order.notes}</Text></View> : null}</View>
-    <View style={styles.orderFooter}><View style={{ flexGrow: 1, minWidth: 92 }}><Text style={styles.totalLabel}>Total Amount</Text><Text style={styles.total}>{money(order.total_centavos)}</Text></View><View style={styles.orderActions}>{order.status === 'confirmed' ? <AppButton label="Reject" variant="secondary" disabled={mutation.busy} onPress={(event) => { event.stopPropagation(); open(); }} /> : null}{transition ? <AppButton label={actionLabel} disabled={mutation.busy || (transition === 'accepted' && !data?.business.rules_approved)} onPress={(event) => { event.stopPropagation(); void saveStatus(transition); }} /> : null}</View></View>
+    <View style={styles.orderFooter}><View style={{ flexGrow: 1, minWidth: 92 }}><Text style={styles.totalLabel}>Total Amount</Text><Text style={styles.total}>{money(order.total_centavos)}</Text></View>{rejecting ? null : <View style={styles.orderActions}>{order.status === 'confirmed' ? <AppButton label="Reject" variant="secondary" disabled={mutation.busy} onPress={(event) => { event.stopPropagation(); setRejecting(true); }} /> : null}{transition ? <AppButton label={actionLabel} disabled={mutation.busy || (transition === 'accepted' && !data?.business.rules_approved)} onPress={(event) => { event.stopPropagation(); void saveStatus(transition); }} /> : null}</View>}</View>
+    {rejecting ? <RejectStep order={order} onCancel={() => setRejecting(false)} /> : null}
   </Card></Pressable>;
 }
 

@@ -5,9 +5,10 @@ import { CheckCircle2 } from 'lucide-react-native';
 import { AppButton } from '@/components/ui/app-button';
 import { AppScreen } from '@/components/layout/app-screen';
 import { Card } from '@/components/ui/card';
+import { FormField } from '@/components/ui/form-field';
 import { colors, spacing, textStyles } from '@/theme/tokens';
 import { command, errorText, photoUrl } from './api';
-import type { Command } from './domain';
+import type { Command, OrderRecord } from './domain';
 import { useOperations } from '@/state/operations';
 
 export function Copy({ children }: { children: ReactNode }) { return <Text style={textStyles.body}>{children}</Text>; }
@@ -28,6 +29,12 @@ export function useMutation() {
     } finally { await refreshPending(); locked.current = false; setBusy(false); }
   }
   return { run, busy, error, success };
+}
+export function RejectStep({ order, onCancel }: { order: OrderRecord; onCancel: () => void }) {
+  const mutation = useMutation(); const [reason, setReason] = useState('');
+  return <><FormField label="Reason for rejection (the customer will see this)" value={reason} onChangeText={setReason} /><ErrorNotice message={mutation.error} />
+    <AppButton label="Confirm rejection" variant="danger" disabled={mutation.busy || !reason.trim()} onPress={(event) => { event.stopPropagation(); void mutation.run({ op: 'transition_order', business_id: order.business_id, id: order.id, version: order.version, status: 'rejected', reason: reason.trim() }); }} />
+    <AppButton label="Cancel" variant="secondary" disabled={mutation.busy} onPress={(event) => { event.stopPropagation(); onCancel(); }} /></>;
 }
 export function DataScreen({ title, children, ownerOnly = false, detail = false }: { title?: string; children: ReactNode; ownerOnly?: boolean; detail?: boolean }) {
   const { data, loading, error, refresh, notice } = useOperations();

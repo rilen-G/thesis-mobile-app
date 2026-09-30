@@ -13,7 +13,7 @@ import { signOut } from '@/state/auth';
 import { colors, spacing, textStyles } from '@/theme/tokens';
 import { errorText, uploadPhoto } from './api';
 import { menuAvailability, menuCategories, money, parsePrice, pickupTimestamp, quantity, statusLabel, transitions, type MenuCategory, type Business, type Customer, type OrderRecord, type Product, type Status } from './domain';
-import { Copy, DataScreen, ErrorNotice, FormCard, PendingSave, ProductPhoto, SuccessNotice, useMutation } from './ui';
+import { Copy, DataScreen, ErrorNotice, FormCard, PendingSave, ProductPhoto, RejectStep, SuccessNotice, useMutation } from './ui';
 
 export function Dashboard() {
   const { data, loading, error, refresh } = useOperations();
@@ -174,7 +174,7 @@ function NewOrder() {
     </FormCard></>;
 }
 function ExistingOrder({order}:{order:OrderRecord}) {
-  const {data}=useOperations();const mutation=useMutation();const edit=useMutation();const [reason,setReason]=useState('');const [rejecting,setRejecting]=useState(false);
+  const {data}=useOperations();const mutation=useMutation();const edit=useMutation();const [rejecting,setRejecting]=useState(false);
   const [time,setTime]=useState(new Date(order.pickup_at).toLocaleTimeString('en-GB',{timeZone:'Asia/Manila',hour:'2-digit',minute:'2-digit'}));const [payment,setPayment]=useState(order.payment_method);const [notes,setNotes]=useState(order.notes);const [error,setError]=useState<string|null>(null);
   const items=data?.items.filter((i)=>i.order_id===order.id)??[];
   return <><FormCard><View style={{alignItems:'flex-start',flexDirection:'row',gap:spacing.md,justifyContent:'space-between'}}><View style={{flex:1}}><Text style={{...textStyles.label,color:colors.terracotta}}>#{order.id.slice(0,8).toUpperCase()}</Text><Text style={[textStyles.title,{fontSize:20,marginTop:6}]}>{data?.customers.find((c)=>c.id===order.customer_id)?.name}</Text><Copy>Pickup · {order.business_date}</Copy></View><StatusBadge status={order.status} label={statusLabel[order.status]} /></View>
@@ -184,9 +184,7 @@ function ExistingOrder({order}:{order:OrderRecord}) {
     {order.status==='confirmed'?<FormCard><FormField label="Pickup time (HH:MM)" value={time} onChangeText={setTime} /><FormField label="Payment method" value={payment} onChangeText={setPayment} /><FormField label="Special request" multiline value={notes} onChangeText={setNotes} /><ErrorNotice message={error??edit.error} />
       <AppButton label="Save confirmed details" disabled={edit.busy||mutation.busy} onPress={()=>{try{setError(null);void edit.run({op:'update_order',business_id:order.business_id,id:order.id,version:order.version,pickup_at:pickupTimestamp(order.business_date,time),payment_method:payment,notes});}catch(failure){setError(errorText(failure));}}} />
     </FormCard>:null}
-    {transitions[order.status].filter((status)=>status!=='expired').length?<FormCard>{rejecting?<><FormField label="Reason for rejection" value={reason} onChangeText={setReason} /><ErrorNotice message={mutation.error} />
-      <AppButton label="Confirm rejection" variant="danger" disabled={mutation.busy||!reason.trim()} onPress={()=>{void mutation.run({op:'transition_order',business_id:order.business_id,id:order.id,version:order.version,status:'rejected',reason});}} />
-      <AppButton label="Cancel" variant="secondary" disabled={mutation.busy} onPress={()=>{setRejecting(false);setReason('');}} /></>:<><ErrorNotice message={mutation.error} />
+    {transitions[order.status].filter((status)=>status!=='expired').length?<FormCard>{rejecting?<RejectStep order={order} onCancel={()=>setRejecting(false)} />:<><ErrorNotice message={mutation.error} />
       {transitions[order.status].filter((status)=>status!=='expired').map((status)=><AppButton key={status} disabled={mutation.busy||edit.busy||(status==='accepted'&&!data?.business.rules_approved)} label={status==='accepted'?'Accept':status==='rejected'?'Reject':status==='completed'?'Received':statusLabel[status]} variant={status==='rejected'?'danger':'primary'} onPress={()=>{if(status==='rejected')setRejecting(true);else void mutation.run({op:'transition_order',business_id:order.business_id,id:order.id,version:order.version,status});}} />)}
       <Copy>{order.status==='confirmed'?(order.reserved?'Quantity was reserved when the customer confirmed. Rejecting restores it.':'Acceptance checks availability and reserves quantity.'):order.status==='accepted'?'A cancellation is recorded as Rejected and restores quantity under the saved policy.':'An unclaimed order remains Ready and is not counted as collected or completed.'}</Copy></>}
     </FormCard>:<Copy>This order has reached a final status.</Copy>}
