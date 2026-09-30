@@ -41,7 +41,7 @@ export function groundedReply(raw:unknown, ctx:Context):{body:string;draft:Draft
  }
  if(e.intent==='menu') {
   const selected=(e.product_ids.length?products.filter(p=>e.product_ids.includes(p.id)):products).slice(0,20);
-  return {body:selected.length?selected.map(p=>`${p.name}: ${money(p.price_centavos)} · ${stock(p.id)} ${fil?'pa ang available':'available online'}`).join('\n'):fil?'Wala pa pong available na items ngayon.':'No items are available right now.',draft:null,sources:selected.map(p=>({id:p.id,version:p.version})),outcome:'validated',language};
+  return {body:selected.length?selected.map(p=>`${p.name}: ${money(p.price_centavos)} · ${stock(p.id)>0?(fil?'available pa po today':'available today'):(fil?'sold out na po today':'sold out today')}`).join('\n'):fil?'Wala pa pong available na items ngayon.':'No items are available right now.',draft:null,sources:selected.map(p=>({id:p.id,version:p.version})),outcome:'validated',language};
  }
  if(e.intent==='faq' && sources.map(s=>s.title+s.body).join('').length>3500) return fallback('faq_too_long');
  if(e.intent==='faq') return sources.length?{body:sources.map(s=>`${s.title}: ${s.body}`).join('\n\n'),draft:null,sources:sources.map(s=>({id:s.id,version:s.version})),outcome:'validated',language}:fallback('unknown_source');
