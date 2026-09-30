@@ -179,7 +179,7 @@ await test('Messenger database boundaries and delivery recovery', async t => {
    for(const [sender,status] of [['310','rejected'],['311','expired']]) {
     await intake('isang coffee po',{sender_id:sender});const work=await svc('claim');
     const reply=await finish(work,{body:'Pakicheck po',sources:[{id:product,version:(await row('products',product)).version}],draft:{items:[{product_id:product,quantity:1}],pickup_at:pickup,payment_method:'cash'},language:'taglish'});
-    assert.match((await row('messenger_messages',reply.id)).body,/Reply-an lang po ng CONFIRM/);await send();
+    assert.doesNotMatch((await row('messenger_messages',reply.id)).body,/CONFIRM/);await send();
     const summary=(await db.query('select * from public.messenger_summaries where message_id=$1',[reply.id])).rows[0];
     await intake(`CONFIRM ${summary.code}`,{sender_id:sender});const confirmed=await finish(await svc('claim'));await send();
     assert.match((await row('messenger_messages',confirmed.id)).body,/Confirmed na po/);assert.equal(await used(),start+1);
@@ -189,6 +189,31 @@ await test('Messenger database boundaries and delivery recovery', async t => {
     const notice=(await db.query("select body from public.messenger_messages where order_id=$1 and kind='status'",[order.id])).rows[0];
     assert.match(notice.body,status==='rejected'?/Pasensya na po/:/Expired na po/);await send();
    }
+  });
+  await t.test('typed yes confirms and unclear replies re-ask without invalidating the pending summary',async()=>{
+   const version=async()=>(await row('products',product)).version;
+   await intake('coffee',{sender_id:'320'});let work=await svc('claim');
+   const reply=await finish(work,{body:'Please check your order',sources:[{id:product,version:await version()}],draft:{items:[{product_id:product,quantity:1}],pickup_at:pickup,payment_method:'cash'}});
+   const summary=(await db.query('select * from public.messenger_summaries where message_id=$1',[reply.id])).rows[0];
+   let offer=await svc('offer');let auth=await svc('authorize',offer);assert.equal(auth.code,summary.code);await svc('result',{...offer,outcome:'accepted'});
+   await intake('hmm',{sender_id:'320',reply_kind:'unclear'});assert.equal((await row('messenger_summaries',summary.id)).valid,true);
+   work=await svc('claim');assert.equal(work.summary.code,summary.code);await finish(work,{body:'Would you like to confirm this order?'});
+   offer=await svc('offer');assert.equal((await svc('authorize',offer)).code,summary.code);await svc('result',{...offer,outcome:'accepted'});
+   const sticker=await intake('',{sender_id:'320',unsupported:true,reply_kind:'unclear'});assert.equal((await row('messenger_messages',sticker.id)).state,'pending');
+   work=await svc('claim');assert.equal(work.message.error_code,'unsupported_message');assert.equal(work.summary.code,summary.code);await finish(work,{body:'Would you like to confirm this order?'});await send();
+   await intake('oo po',{sender_id:'320',reply_kind:'yes'});work=await svc('claim');
+   await finish(work,{body:'Checking your confirmation.',confirm_code:work.summary.code});
+   assert.ok((await row('messenger_summaries',summary.id)).order_id);await send();
+  });
+  await t.test('an edited order invalidates the old summary so its code can no longer confirm',async()=>{
+   await db.query('update public.daily_allocations set total=total+5 where product_id=$1',[product]);
+   await intake('coffee',{sender_id:'321'});const work=await svc('claim');
+   const reply=await finish(work,{body:'Please check your order',sources:[{id:product,version:(await row('products',product)).version}],draft:{items:[{product_id:product,quantity:1}],pickup_at:pickup,payment_method:'cash'}});await send();
+   const summary=(await db.query('select * from public.messenger_summaries where message_id=$1',[reply.id])).rows[0];
+   await intake('make it 2 please',{sender_id:'321'});assert.equal((await row('messenger_summaries',summary.id)).valid,false);
+   const next=await svc('claim');assert.equal(next.summary,null);
+   await finish(next,{body:'Checking your confirmation.',confirm_code:summary.code});await send();
+   assert.equal((await row('messenger_summaries',summary.id)).order_id,null);
   });
  } finally { await db.close(); }
 });

@@ -1,8 +1,8 @@
 import { schema, normalizeMessage, type Context } from '../_shared/grounding.ts';
-import { confirmationCode, liveReply, manychatBody, LIVE_SYSTEM_PROMPT } from '../_shared/messenger-domain.ts';
+import { confirmationCode, confirmChips, liveReply, manychatBody, summaryReply, LIVE_SYSTEM_PROMPT } from '../_shared/messenger-domain.ts';
 import { connections, equalSecret, respond, rpc, type ConnectionConfig } from '../_shared/messenger-runtime.ts';
 
-type Work = { message: { id: string; body: string; processing_token: string }; probe: boolean;
+type Work = { message: { id: string; body: string; processing_token: string; error_code: string | null }; probe: boolean; summary: { code: string } | null;
   conversation: { order_id: string | null; reply_language?: 'en' | 'taglish' | null }; business: { id: string; version: number; opening_time: string; cutoff_time: string };
   products: Context['products']; knowledge: Context['knowledge']; allocations: Context['allocations']; history: { role: string; body: string }[] };
 async function process(connection: ConnectionConfig, work: Work) {
@@ -10,6 +10,8 @@ async function process(connection: ConnectionConfig, work: Work) {
     processing_token: work.message.processing_token, business_version: work.business.version, ...values });
   try {
     if (work.probe || confirmationCode(work.message.body)) { await finish({ body: 'Checking your confirmation.', sources: [] }); return; }
+    const direct = summaryReply(work.message.body, work.message.error_code === 'unsupported_message', work.summary?.code, work.conversation.reply_language === 'taglish');
+    if (direct) { await finish(direct); return; }
     const key = Deno.env.get('GEMINI_API_KEY'); if (!key) throw new Error('configuration');
     const now = new Date(); const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
     const ctx: Context = { business_id: work.business.id, business_version: work.business.version, products: work.products, knowledge: work.knowledge,
@@ -42,11 +44,11 @@ async function process(connection: ConnectionConfig, work: Work) {
   }
 }
 async function sendManychat(connection: ConnectionConfig, attempt_id: string) {
-  const auth = await rpc<{ allowed: boolean; text: string; recipient_id: string }>(connection, 'authorize', { attempt_id });
+  const auth = await rpc<{ allowed: boolean; text: string; recipient_id: string; page_id: string; code: string | null; language: string | null }>(connection, 'authorize', { attempt_id });
   if (!auth.allowed) return;
   const response = await fetch('https://api.manychat.com/fb/sending/sendContent', { method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${connection.api_key}` },
-    body: manychatBody(auth.recipient_id, auth.text), signal: AbortSignal.timeout(8000), redirect: 'error' }).catch(() => null);
+    body: manychatBody(auth.recipient_id, auth.text, auth.code ? confirmChips(`${Deno.env.get('SUPABASE_URL')}/functions/v1/messenger-ingest`, connection, { ...auth, code: auth.code }) : []), signal: AbortSignal.timeout(8000), redirect: 'error' }).catch(() => null);
   const accepted = response?.ok && (await response.json().catch(() => null))?.status === 'success';
   await rpc(connection, 'result', { attempt_id, outcome: accepted ? 'accepted' : 'unknown' });
 }

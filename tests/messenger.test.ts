@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { confirmationCode, parseInbound, liveReply, manychatBody, manychatInbound, validHookUrl, LIVE_SYSTEM_PROMPT } from '../supabase/functions/_shared/messenger-domain.ts';
+import { confirmationCode, confirmChips, parseInbound, liveReply, manychatBody, manychatInbound, manychatTap, replyKind, summaryReply, validHookUrl, LIVE_SYSTEM_PROMPT } from '../supabase/functions/_shared/messenger-domain.ts';
 
 test('intake preserves stable identifiers and rejects unsafe/ambiguous payloads', () => {
   const event = { page_id: '123', sender_id: '456', event_id: 'mid.1', text: ' coffee ', timestamp: Date.now() };
@@ -51,6 +51,37 @@ test('ManyChat attachment URLs become unsupported without keeping the URL', asyn
 test('ManyChat send body keeps the exact subscriber id digits', () => {
   const body = manychatBody('28272978999035230', 'Line "one"\nLine two');
   assert.match(body, /^\{"subscriber_id":28272978999035230,/);
-  assert.deepEqual(JSON.parse(body).data, { version: 'v2', content: { messages: [{ type: 'text', text: 'Line "one"\nLine two' }] } });
+  assert.deepEqual(JSON.parse(body).data, { version: 'v2', content: { messages: [{ type: 'text', text: 'Line "one"\nLine two' }], quick_replies: [] } });
   assert.throws(() => manychatBody('1,"x":1', 'text'));
+});
+test('only exact short replies count as yes; filler and attachments are unclear', () => {
+  for (const text of ['oo', 'Opo!', 'yes po 👍', 'Sige po.', 'CONFIRM', 'ok po', ' sige ']) assert.equal(replyKind(text), 'yes');
+  for (const text of ['ok', 'hmm', '👍', 'Hmmm...', '']) assert.equal(replyKind(text), 'unclear');
+  assert.equal(replyKind('[Unsupported message or attachment — open Messenger to review]', true), 'unclear');
+  for (const text of ['oo pero 2 na lang', 'yes, change to 7pm', 'okay na 3 pcs']) assert.equal(replyKind(text), null);
+});
+test('pending summaries: yes confirms the latest code, unclear re-asks, change asks what to change', () => {
+  assert.deepEqual(summaryReply('oo po', false, 'ABCD1234', false), { body: 'Checking your confirmation.', sources: [], confirm_code: 'ABCD1234' });
+  assert.equal(summaryReply('hmm', false, 'ABCD1234', false)?.body, 'Would you like to confirm this order?');
+  assert.equal(summaryReply('', true, 'ABCD1234', true)?.body, 'I-confirm na po ba ang order?');
+  assert.equal(summaryReply('oo', false, null, false), null);
+  assert.equal(summaryReply('2 lattes instead', false, 'ABCD1234', false), null);
+  assert.equal(summaryReply('CHANGE ORDER', false, null, true)?.body, 'Ano pong gusto niyong baguhin sa order?');
+});
+test('chip taps map to the existing confirmation path and count once', async () => {
+  const tap = { connection_id: 'conn', page_id: '1290339024167301', sender_id: '28272978999035230', code: 'ABCD1234', action: 'confirm' };
+  const event = parseInbound(await manychatTap(tap, 'conn'));
+  assert.equal(event.text, 'CONFIRM ABCD1234'); assert.equal(event.sender_id, '28272978999035230');
+  assert.equal((await manychatTap(tap, 'conn')).event_id, event.event_id);
+  const change = await manychatTap({ ...tap, action: 'change' }, 'conn');
+  assert.equal(change.text, 'CHANGE ORDER'); assert.notEqual(change.event_id, event.event_id);
+  for (const bad of [{ ...tap, connection_id: 'other' }, { ...tap, code: 'abc' }, { ...tap, action: 'cancel' }]) await assert.rejects(manychatTap(bad, 'conn'));
+});
+test('confirmation chips carry the full callback payload in the send body', () => {
+  const chips = confirmChips('https://example.supabase.co/functions/v1/messenger-ingest', { id: 'conn', secret: 's'.repeat(32) }, { page_id: '1290339024167301', recipient_id: '28272978999035230', code: 'ABCD1234', language: 'taglish' });
+  assert.deepEqual(chips.map(c => c.caption), ['I-confirm', 'Baguhin']);
+  assert.deepEqual(chips[0].payload, { connection_id: 'conn', page_id: '1290339024167301', sender_id: '28272978999035230', code: 'ABCD1234', action: 'confirm' });
+  assert.equal(chips[0].headers['x-messenger-connection'], 'conn');
+  const body = JSON.parse(manychatBody('28272978999035230', 'Please check your order', chips));
+  assert.equal(body.data.content.quick_replies.length, 2); assert.equal(body.data.content.quick_replies[1].type, 'dynamic_block_callback');
 });
