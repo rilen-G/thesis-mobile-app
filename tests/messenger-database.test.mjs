@@ -83,7 +83,7 @@ await test('Messenger database boundaries and delivery recovery', async t => {
    const saved=await row('messenger_summaries',summary.id);assert.ok(saved.order_id);
    const order=await row('orders',saved.order_id);assert.equal(order.status,'confirmed');assert.equal(Number(order.total_centavos),15000);
    assert.deepEqual((await db.query('select product_id,name,quantity from public.order_items where order_id=$1',[order.id])).rows,[{product_id:product,name:'Coffee',quantity:1}]);
-   assert.equal((await db.query('select used from public.daily_allocations where product_id=$1',[product])).rows[0].used,0);
+   assert.equal(order.reserved,true);assert.equal((await db.query('select used from public.daily_allocations where product_id=$1',[product])).rows[0].used,1);
    await intake(`CONFIRM ${summary.code}`);await finish(await svc('claim'));await send();
    assert.equal((await db.query('select count(*)::int n from public.orders')).rows[0].n,1);
    await command(staff,{op:'transition_order',business_id:bid,id:order.id,version:order.version,status:'accepted'});
@@ -173,6 +173,22 @@ await test('Messenger database boundaries and delivery recovery', async t => {
    const paused=await row('messenger_connections',conn);await app('enabled',{enabled:true,version:paused.version});
    assert.equal(await svc('offer'),null);
    assert.equal((await db.query('select count(*)::int n from public.messenger_conversations where business_id=$1',[bid2])).rows[0].n,0);
+  });
+  await t.test('reserved confirmed orders restore stock when rejected or expired; replies follow the conversation language',async()=>{
+   const used=async()=>(await db.query('select used from public.daily_allocations where product_id=$1',[product])).rows[0].used;const start=await used();
+   for(const [sender,status] of [['310','rejected'],['311','expired']]) {
+    await intake('isang coffee po',{sender_id:sender});const work=await svc('claim');
+    const reply=await finish(work,{body:'Pakicheck po',sources:[{id:product,version:(await row('products',product)).version}],draft:{items:[{product_id:product,quantity:1}],pickup_at:pickup,payment_method:'cash'},language:'taglish'});
+    assert.match((await row('messenger_messages',reply.id)).body,/Reply-an lang po ng CONFIRM/);await send();
+    const summary=(await db.query('select * from public.messenger_summaries where message_id=$1',[reply.id])).rows[0];
+    await intake(`CONFIRM ${summary.code}`,{sender_id:sender});const confirmed=await finish(await svc('claim'));await send();
+    assert.match((await row('messenger_messages',confirmed.id)).body,/Confirmed na po/);assert.equal(await used(),start+1);
+    const order=await row('orders',(await row('messenger_summaries',summary.id)).order_id);
+    await command(staff,{op:'transition_order',business_id:bid,id:order.id,version:order.version,status,reason:'test'});
+    assert.equal(await used(),start);
+    const notice=(await db.query("select body from public.messenger_messages where order_id=$1 and kind='status'",[order.id])).rows[0];
+    assert.match(notice.body,status==='rejected'?/Pasensya na po/:/Expired na po/);await send();
+   }
   });
  } finally { await db.close(); }
 });

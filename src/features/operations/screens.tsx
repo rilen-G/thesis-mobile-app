@@ -186,7 +186,7 @@ function ExistingOrder({order}:{order:OrderRecord}) {
     </FormCard>:null}
     {transitions[order.status].filter((status)=>status!=='expired').length?<FormCard>{transitions[order.status].includes('rejected')?<FormField label="Reason (required for rejection)" value={reason} onChangeText={setReason} />:null}<ErrorNotice message={mutation.error} />
       {transitions[order.status].filter((status)=>status!=='expired').map((status)=><AppButton key={status} disabled={mutation.busy||edit.busy||(status==='accepted'&&!data?.business.rules_approved)||(status==='rejected'&&!reason.trim())} label={status==='accepted'?'Accept':status==='completed'?'Received':statusLabel[status]} variant={status==='rejected'?'danger':'primary'} onPress={()=>{void mutation.run({op:'transition_order',business_id:order.business_id,id:order.id,version:order.version,status,reason});}} />)}
-      <Copy>{order.status==='confirmed'?'Acceptance checks availability and reserves quantity.':order.status==='accepted'?'A cancellation is recorded as Rejected and restores quantity under the saved policy.':'An unclaimed order remains Ready and is not counted as collected or completed.'}</Copy>
+      <Copy>{order.status==='confirmed'?(order.reserved?'Quantity was reserved when the customer confirmed. Rejecting restores it.':'Acceptance checks availability and reserves quantity.'):order.status==='accepted'?'A cancellation is recorded as Rejected and restores quantity under the saved policy.':'An unclaimed order remains Ready and is not counted as collected or completed.'}</Copy>
     </FormCard>:<Copy>This order has reached a final status.</Copy>}
     {data?.role==='owner'?<FormCard><Text style={textStyles.title}>Order history</Text>{data.events.filter((e)=>e.record_id===order.id).map((event)=><Copy key={event.id}>{new Date(event.created_at).toLocaleString()} · {event.action}{event.detail.from?` · ${event.detail.from} → ${event.detail.to}`:''}{event.detail.reason?` · ${event.detail.reason}`:''}</Copy>)}</FormCard>:null}
   </>;
@@ -214,7 +214,7 @@ function SettingsEditor({business}:{business:Business}) {
   return <><Text style={textStyles.title}>General</Text><FormCard><FormField label="Business name" value={name} onChangeText={setName} /><FormField label="Business address" value={address} onChangeText={setAddress} /></FormCard>
     <Text style={textStyles.title}>Order Handling</Text><FormCard>
     <FormField label="Opening time (HH:MM)" value={opening} onChangeText={(value)=>{setOpening(value);setApproved(false);}} /><FormField label="Pickup cutoff (HH:MM)" value={cutoff} onChangeText={(value)=>{setCutoff(value);setApproved(false);}} />
-    <Copy>Orders use same-day pickup in Asia/Manila. Staff acceptance checks the cutoff and reserves quantity. Unclaimed orders remain Ready and are not counted as completed.</Copy>
+    <Copy>Orders use same-day pickup in Asia/Manila. Staff acceptance checks the cutoff and reserves quantity; Messenger orders reserve it when the customer confirms. Unclaimed orders remain Ready and are not counted as completed.</Copy>
     <Copy>Restore quantity when an accepted order is rejected</Copy><Switch accessibilityLabel="Restore quantity when an accepted order is rejected" value={restore} onValueChange={(value)=>{setRestore(value);setApproved(false);}} />
     <Copy>I confirm these business rules and operating hours.</Copy><Switch accessibilityLabel="Approve business order rules" value={approved} onValueChange={setApproved} />
     </FormCard><Text style={textStyles.title}>AI Assistant</Text><FormCard>

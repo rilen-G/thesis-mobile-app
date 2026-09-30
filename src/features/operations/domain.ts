@@ -24,7 +24,7 @@ export function menuAvailability(product: Pick<Product, 'active'>, allocation?: 
   return { remaining, status };
 }
 export type Customer = { id: string; business_id: string; name: string; phone: string; notes: string; archived: boolean; version: number };
-export type OrderRecord = { id: string; business_id: string; customer_id: string; status: Status; total_centavos: number; pickup_at: string; business_date: string; payment_method: string; notes: string; created_at: string; version: number; restore_before_preparing: boolean };
+export type OrderRecord = { id: string; business_id: string; customer_id: string; status: Status; total_centavos: number; pickup_at: string; business_date: string; payment_method: string; notes: string; created_at: string; version: number; restore_before_preparing: boolean; reserved: boolean };
 export type OrderItem = { id: string; order_id: string; business_id: string; product_id: string; name: string; quantity: number; price_centavos: number };
 export type Audit = { id: string; business_id: string; actor_id: string; action: string; record_id: string; detail: Record<string, unknown>; created_at: string };
 export type Snapshot = { business: Business; role: Role; members: Member[]; products: Product[]; allocations: Allocation[]; customers: Customer[]; orders: OrderRecord[]; items: OrderItem[]; events: Audit[]; today: string };

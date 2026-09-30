@@ -78,7 +78,7 @@ In Supabase Vault, create `messenger_project_url` and `messenger_worker_secret` 
 
 Open **Dashboard → Messenger inbox** (also linked from Settings). Send a new message from the configured tester. Check Zap A, Zap B, and receipt of the fixed test reply in Messenger. Click **I received the test reply**. The backend requires a recorded successful probe first. The connection remains paused until the owner clicks **Enable Messenger automation**.
 
-Exercise menu inquiries, a pickup order, `CONFIRM <8-character code>`, and staff acceptance/ready/received. Codes expire after 30 minutes or pickup time, whichever is earlier. Corrections invalidate old codes. A confirmed order reserves no quantity; staff acceptance performs the normal atomic allocation checks. After confirmation, further concerns are flagged for the owner rather than modifying the order automatically.
+Exercise menu inquiries, a pickup order, `CONFIRM <8-character code>`, and staff acceptance/ready/received. Codes expire after 30 minutes or pickup time, whichever is earlier. Corrections invalidate old codes. A confirmed order reserves its quantity immediately; staff acceptance keeps that reservation, and rejecting or expiring it before acceptance restores it. After confirmation, further concerns are flagged for the owner rather than modifying the order automatically.
 
 ## ManyChat alternative
 
