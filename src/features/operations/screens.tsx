@@ -72,7 +72,7 @@ function ProductEditor({item}:{item?:Product}) {
   const uploaded=useRef<{uri:string;path:string}|null>(null);
   const [version,setVersion]=useState(item?.version??0);
   async function choose() {
-    try { const result=await ImagePicker.launchImageLibraryAsync({mediaTypes:['images'],base64:true,quality:0.7,allowsEditing:true}); if(!result.canceled) {setPhoto(result.assets[0]);uploaded.current=null;} }
+    try { const result=await ImagePicker.launchImageLibraryAsync({mediaTypes:['images'],quality:1,allowsEditing:true}); if(!result.canceled) {setPhoto(result.assets[0]);uploaded.current=null;} }
     catch(failure){setError(errorText(failure));}
   }
   async function save() {

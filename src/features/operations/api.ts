@@ -1,6 +1,7 @@
 import { Buffer } from 'buffer';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Crypto from 'expo-crypto';
+import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import type { ImagePickerAsset } from 'expo-image-picker';
 import { backend } from '@/lib/supabase';
 import type { Command, Snapshot } from './domain';
@@ -48,13 +49,14 @@ export async function snapshot(): Promise<Snapshot | null> {
   return data as Snapshot;
 }
 export async function uploadPhoto(businessId: string, productId: string, asset: ImagePickerAsset) {
-  if (!asset.base64) throw new Error('Could not read this photo. Select it again.');
-  const mime = asset.mimeType ?? 'image/jpeg';
-  if (!['image/jpeg', 'image/png', 'image/webp'].includes(mime)) throw new Error('Choose a JPEG, PNG, or WebP photo.');
-  const bytes = Buffer.from(asset.base64, 'base64');
+  const context = ImageManipulator.manipulate(asset.uri);
+  if (Math.max(asset.width, asset.height) > 600) context.resize(asset.width >= asset.height ? { width: 600 } : { height: 600 });
+  const image = await (await context.renderAsync()).saveAsync({ format: SaveFormat.JPEG, compress: 0.8, base64: true });
+  if (!image.base64) throw new Error('Could not read this photo. Select it again.');
+  const bytes = Buffer.from(image.base64, 'base64');
   if (bytes.length > 5 * 1024 * 1024) throw new Error('Choose a photo smaller than 5 MB.');
-  const path = `${businessId}/${productId}/${Crypto.randomUUID()}.${mime.split('/')[1]}`;
-  const { error } = await backend().storage.from('product-photos').upload(path, bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength), { contentType: mime, upsert: false });
+  const path = `${businessId}/${productId}/${Crypto.randomUUID()}.jpeg`;
+  const { error } = await backend().storage.from('product-photos').upload(path, bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength), { contentType: 'image/jpeg', upsert: false });
   if (error) throw error;
   return path;
 }
