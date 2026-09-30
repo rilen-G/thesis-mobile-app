@@ -1,12 +1,12 @@
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import {
   AlertCircle, Banknote, CalendarDays, CheckCircle2, ChevronRight,
   Clock3, History, Megaphone, MessageCircle, MessageSquareText,
   Plus, Search, ShoppingBag, TrendingUp,
   UtensilsCrossed, WalletCards, ReceiptText,
 } from 'lucide-react-native';
-import { useMemo, useState, type ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import { AppState, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { AppButton } from '@/components/ui/app-button';
 import { Card } from '@/components/ui/card';
@@ -57,8 +57,14 @@ export function Dashboard() {
 const orderTabs: ('all' | Status)[] = ['all', 'confirmed', 'accepted', 'ready', 'completed', 'rejected', 'expired'];
 
 export function Orders() {
-  const { data } = useOperations();
+  const { data, refresh } = useOperations();
   const [filter, setFilter] = useState<'all' | Status>('all');
+  useFocusEffect(useCallback(() => {
+    let active = true; let fetching = false;
+    const poll = async () => { if (!active || fetching || AppState.currentState === 'background') return; fetching = true; try { await refresh(); } finally { fetching = false; } };
+    void poll(); const interval = setInterval(() => { void poll(); }, 15000);
+    return () => { active = false; clearInterval(interval); };
+  }, [refresh]));
   const orders = data?.orders.filter((order) => filter === 'all' || order.status === filter) ?? [];
   return <DataScreen>
     <ScrollView horizontal contentContainerStyle={styles.filterRow} showsHorizontalScrollIndicator={false} style={styles.edgeScroll}>
