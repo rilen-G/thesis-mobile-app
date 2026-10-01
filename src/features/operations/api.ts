@@ -16,6 +16,7 @@ export function errorText(error: unknown): string {
     rules_required: 'The owner must record the business order rules in Settings before confirming orders.',
     invalid_transition: 'This order cannot move to that status.', pickup_closed: 'Pickup must be today, in the future, within the approved business hours.',
     request_conflict: 'This retry differs from the original request. Reload before submitting a different action.',
+    messenger_order_locked: "Messenger orders can't be edited after the customer confirms.",
   };
   return known[message] ?? (/fetch|network|timeout/i.test(message) ? 'Connection unavailable. Your inputs are preserved. Check your connection and retry.' : message);
 }

@@ -82,6 +82,7 @@ await test('Messenger database boundaries and delivery recovery', async t => {
    await intake(`CONFIRM ${summary.code}`);await finish(await svc('claim'));await send();
    const saved=await row('messenger_summaries',summary.id);assert.ok(saved.order_id);
    const order=await row('orders',saved.order_id);assert.equal(order.status,'confirmed');assert.equal(Number(order.total_centavos),15000);assert.equal(order.notes,'less ice');
+   await assert.rejects(command(staff,{op:'update_order',business_id:bid,id:order.id,version:order.version,pickup_at:pickup,payment_method:'GCash',notes:''}),/messenger_order_locked/);
    assert.deepEqual((await db.query('select product_id,name,quantity from public.order_items where order_id=$1',[order.id])).rows,[{product_id:product,name:'Coffee',quantity:1}]);
    assert.equal(order.reserved,true);assert.equal((await db.query('select used from public.daily_allocations where product_id=$1',[product])).rows[0].used,1);
    await intake(`CONFIRM ${summary.code}`);await finish(await svc('claim'));await send();
