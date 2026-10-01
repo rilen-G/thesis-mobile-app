@@ -210,7 +210,7 @@ await test('Messenger database boundaries and delivery recovery', async t => {
    await finish(work,{body:'Checking your confirmation.',confirm_code:work.summary.code});
    const orderId=(await row('messenger_summaries',summary.id)).order_id;assert.ok(orderId);await send();
    for(const next of ['accepted','ready','completed']) {const current=await row('orders',orderId);await command(staff,{op:'transition_order',business_id:bid,id:orderId,version:current.version,status:next});await send();}
-   assert.equal((await db.query("select body from public.messenger_messages where order_id=$1 and kind='status' order by seq desc limit 1",[orderId])).rows[0].body,'Thank you for picking up your order (1 × Coffee)!');
+   assert.equal((await db.query("select body from public.messenger_messages where order_id=$1 and kind='status' order by seq desc limit 1",[orderId])).rows[0].body,'Thank you for picking up your order (1 × Coffee)! Follow our Page for new menu updates.');
   });
   await t.test('an edited order invalidates the old summary so its code can no longer confirm',async()=>{
    await db.query('update public.daily_allocations set total=total+5 where product_id=$1',[product]);
