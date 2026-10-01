@@ -77,11 +77,11 @@ await test('Messenger database boundaries and delivery recovery', async t => {
    await intake('one coffee');const work=await svc('claim');
    assert.equal(work.history.at(-1).body,'one coffee');assert.ok(work.history.every(m=>typeof m.body==='string'));
    assert.equal(work.knowledge[0].body,'Collect at the counter.');assert.equal(work.allocations[0].total,2);
-   const reply=await finish(work,{body:'Review coffee',sources:[{id:product,version:1}],draft:{items:[{product_id:product,quantity:1}],pickup_at:pickup,payment_method:'cash'}});
+   const reply=await finish(work,{body:'Review coffee',sources:[{id:product,version:1}],draft:{items:[{product_id:product,quantity:1}],pickup_at:pickup,payment_method:'cash',notes:'less ice'}});
    await send();const summary=(await db.query('select * from public.messenger_summaries where message_id=$1',[reply.id])).rows[0];
    await intake(`CONFIRM ${summary.code}`);await finish(await svc('claim'));await send();
    const saved=await row('messenger_summaries',summary.id);assert.ok(saved.order_id);
-   const order=await row('orders',saved.order_id);assert.equal(order.status,'confirmed');assert.equal(Number(order.total_centavos),15000);
+   const order=await row('orders',saved.order_id);assert.equal(order.status,'confirmed');assert.equal(Number(order.total_centavos),15000);assert.equal(order.notes,'less ice');
    assert.deepEqual((await db.query('select product_id,name,quantity from public.order_items where order_id=$1',[order.id])).rows,[{product_id:product,name:'Coffee',quantity:1}]);
    assert.equal(order.reserved,true);assert.equal((await db.query('select used from public.daily_allocations where product_id=$1',[product])).rows[0].used,1);
    await intake(`CONFIRM ${summary.code}`);await finish(await svc('claim'));await send();
