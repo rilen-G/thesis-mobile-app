@@ -55,12 +55,13 @@ export function groundedReply(raw:unknown, ctx:Context):{body:string;draft:Draft
   if(!e.items.length||e.clarification==='product') return ask('Which item from the menu would you like?','Ano pong item sa menu ang gusto niyo?');
   if(e.clarification==='quantity'||e.items.some(i=>i.quantity===null)) return ask('How many of each item?','Ilan po sa bawat item?');
   const short=e.items.find(i=>stock(i.product_id)<i.quantity);
+  const cart=e.items.map(i=>`${i.quantity} × ${products.find(p=>p.id===i.product_id)!.name}`).join(', ');
   if(short){const left=Math.max(stock(short.product_id),0),name=products.find(p=>p.id===short.product_id)!.name;return left?ask(`Sorry, only ${left} left of ${name}. Would you like to order ${left} instead?`,`Pasensya na po, ${left} na lang po ang available na ${name}. ${left} na lang po ba ang order niyo?`):ask(`Sorry, ${name} is sold out today.`,`Pasensya na po, sold out na po ang ${name} ngayon.`);}
   const now=minutes(new Date(Date.parse(ctx.now)+288e5).toISOString().slice(11,16)),first=minutes(ctx.opening),last=minutes(ctx.cutoff);
   if(now>=last) return ask(`Sorry, pickups are closed for today (until ${close}). Please message us again tomorrow.`,`Sorry po, sarado na ang pickup for today (hanggang ${close} lang). Message po ulit kayo bukas.`);
   if(e.pickup_day==='other') return ask(`We only take same-day pickup. What time today, between ${open} and ${close}?`,`Same-day pickup lang po kami. Anong oras po today, from ${open} to ${close}?`);
   const h=e.pickup_hour??-1,m=e.pickup_minute??0;
-  if(!Number.isInteger(h)||h<0||h>23||!Number.isInteger(m)||m<0||m>59) return ask(`What time will you pick up today? We're open ${open} – ${close}.`,`Anong oras po kayo magpi-pickup today? Open kami ${open} – ${close}.`);
+  if(!Number.isInteger(h)||h<0||h>23||!Number.isInteger(m)||m<0||m>59) return ask(`What time will you pick up your ${cart} today? We're open ${open} – ${close}.`,`Anong oras po ninyo kukunin ang ${cart} today? Open kami ${open} – ${close}.`);
   const ambiguous=e.pickup_period==='none'&&h>=1&&h<=12;
   const candidates=ambiguous?[h%12*60+m,(h%12+12)*60+m]:[(e.pickup_period==='am'&&h<=12?h%12:e.pickup_period==='pm'&&h<12?h+12:h)*60+m];
   const possible=candidates.filter(t=>t>now&&t>=first&&t<=last);
@@ -70,9 +71,9 @@ export function groundedReply(raw:unknown, ctx:Context):{body:string;draft:Draft
   if(time<=now) return ask(`That time has already passed. What time later today, until ${close}?`,`Lumipas na po ang oras na iyan. Anong oras po mamaya, hanggang ${close}?`);
   if(time<first) return ask(`We open at ${open}. What time between ${open} and ${close}?`,`Open po kami ng ${open}. Anong oras po from ${open} to ${close}?`);
   if(time>last) return ask(`Pickup is only until ${close} today. What time before ${close}?`,`Hanggang ${close} lang po ang pickup today. Anong oras po bago mag-${close}?`);
-  if(typeof e.payment_method!=='string'||!e.payment_method.trim()||e.payment_method.trim().length>80) return ask('Will you pay cash or GCash on pickup?','Cash po ba o GCash ang bayad pag-pickup?');
+  if(typeof e.payment_method!=='string'||!e.payment_method.trim()||e.payment_method.trim().length>80) return ask(`Will you pay cash or GCash for your ${cart} on pickup?`,`Cash po ba o GCash ang bayad sa ${cart} pag-pickup?`);
   const paid=e.payment_method.trim(),payment=/g[\s-]?cash/i.test(paid)?'GCash':/\bcash\b/i.test(paid)?'Cash':null;
-  if(!payment) return ask('We only accept Cash or GCash. Which one would you like?','Cash o GCash lang po ang tinatanggap namin. Alin po ang gagamitin niyo?');
+  if(!payment) return ask(`We only accept Cash or GCash. Which one would you like for your ${cart}?`,`Cash o GCash lang po ang tinatanggap namin. Alin po ang gagamitin niyo sa ${cart}?`);
   const total=e.items.reduce((s,i)=>s+products.find(p=>p.id===i.product_id)!.price_centavos*i.quantity,0);
   const draft={items:e.items,pickup_at:`${ctx.today}T${String(Math.floor(time/60)).padStart(2,'0')}:${String(time%60).padStart(2,'0')}:00+08:00`,payment_method:payment,notes:note};
   return {body:`${fil?'Pakicheck po ng order niyo':'Please check your order'}:\n${e.items.map(i=>`${i.quantity} × ${products.find(p=>p.id===i.product_id)!.name}`).join('\n')}\n${money(total)} · pickup ${clock(time,true)} · ${draft.payment_method}${note?`\n${fil?'Note po':'Note'}: ${note}`:''}`,draft,sources:e.items.map(i=>({id:i.product_id,version:products.find(p=>p.id===i.product_id)!.version})),outcome:'validated',language};

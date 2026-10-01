@@ -79,13 +79,15 @@ await test('Messenger database boundaries and delivery recovery', async t => {
    assert.equal(work.knowledge[0].body,'Collect at the counter.');assert.equal(work.allocations[0].total,2);
    const reply=await finish(work,{body:'Review coffee',sources:[{id:product,version:1}],draft:{items:[{product_id:product,quantity:1}],pickup_at:pickup,payment_method:'cash',notes:'less ice'}});
    await send();const summary=(await db.query('select * from public.messenger_summaries where message_id=$1',[reply.id])).rows[0];
-   await intake(`CONFIRM ${summary.code}`);await finish(await svc('claim'));await send();
+   await intake(`CONFIRM ${summary.code}`);const confirmed=await finish(await svc('claim'));await send();
+   assert.equal((await row('messenger_messages',confirmed.id)).body,'Your order (1 × Coffee) is confirmed and your items are reserved. We will message you when staff accepts it.');
    const saved=await row('messenger_summaries',summary.id);assert.ok(saved.order_id);
    const order=await row('orders',saved.order_id);assert.equal(order.status,'confirmed');assert.equal(Number(order.total_centavos),15000);assert.equal(order.notes,'less ice');
    await assert.rejects(command(staff,{op:'update_order',business_id:bid,id:order.id,version:order.version,pickup_at:pickup,payment_method:'GCash',notes:''}),/messenger_order_locked/);
    assert.deepEqual((await db.query('select product_id,name,quantity from public.order_items where order_id=$1',[order.id])).rows,[{product_id:product,name:'Coffee',quantity:1}]);
    assert.equal(order.reserved,true);assert.equal((await db.query('select used from public.daily_allocations where product_id=$1',[product])).rows[0].used,1);
-   await intake(`CONFIRM ${summary.code}`);await finish(await svc('claim'));await send();
+   await intake(`CONFIRM ${summary.code}`);const again=await finish(await svc('claim'));await send();
+   assert.equal((await row('messenger_messages',again.id)).body,'Your order (1 × Coffee) is already confirmed. Staff will handle it.');
    assert.equal((await db.query('select count(*)::int n from public.orders')).rows[0].n,1);
    await command(staff,{op:'transition_order',business_id:bid,id:order.id,version:order.version,status:'accepted'});
    assert.equal((await db.query('select used from public.daily_allocations where product_id=$1',[product])).rows[0].used,1);
@@ -183,7 +185,7 @@ await test('Messenger database boundaries and delivery recovery', async t => {
     assert.doesNotMatch((await row('messenger_messages',reply.id)).body,/CONFIRM/);await send();
     const summary=(await db.query('select * from public.messenger_summaries where message_id=$1',[reply.id])).rows[0];
     await intake(`CONFIRM ${summary.code}`,{sender_id:sender});const confirmed=await finish(await svc('claim'));await send();
-    assert.match((await row('messenger_messages',confirmed.id)).body,/Confirmed na po/);assert.equal(await used(),start+1);
+    assert.equal((await row('messenger_messages',confirmed.id)).body,'Confirmed na po ang order niyo (1 × Coffee) at naka-reserve na ang items. Imi-message namin kayo pag in-accept na ng staff.');assert.equal(await used(),start+1);
     const order=await row('orders',(await row('messenger_summaries',summary.id)).order_id);
     await command(staff,{op:'transition_order',business_id:bid,id:order.id,version:order.version,status,reason:'test'});
     assert.equal(await used(),start);
