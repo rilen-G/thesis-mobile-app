@@ -230,5 +230,17 @@ await test('Messenger database boundaries and delivery recovery', async t => {
    const order=await row('orders',first);await command(staff,{op:'transition_order',business_id:bid,id:first,version:order.version,status:'rejected',reason:'Sold out'});
    assert.deepEqual((await db.query("select body from public.messenger_messages where order_id=$1 and kind='status'",[first])).rows,[{body:"Sorry, we can't accommodate your order (1 × Coffee) because it's sold out today."}]);await send();
   });
+  await t.test('only Cash or GCash summaries confirm; stale status notices are labelled superseded',async()=>{
+   const place=async(payment)=>{await intake('coffee',{sender_id:'323'});const work=await svc('claim');
+    const reply=await finish(work,{body:'Please check your order',sources:[{id:product,version:(await row('products',product)).version}],draft:{items:[{product_id:product,quantity:1}],pickup_at:pickup,payment_method:payment}});await send();
+    const summary=(await db.query('select * from public.messenger_summaries where message_id=$1',[reply.id])).rows[0];
+    await intake('CONFIRM '+summary.code,{sender_id:'323'});await finish(await svc('claim'));await send();
+    return (await row('messenger_summaries',summary.id)).order_id;};
+   assert.equal(await place('card'),null);
+   const id=await place('Cash');assert.ok(id);
+   for(const status of ['accepted','ready','completed']){const order=await row('orders',id);await command(staff,{op:'transition_order',business_id:bid,id,version:order.version,status});}
+   for(let i=0;i<2;i++){const offer=await svc('offer');assert.equal((await svc('authorize',offer)).allowed,false);assert.equal((await row('messenger_messages',offer.job_id)).error_code,'status_superseded');}
+   const last=await send();assert.match((await row('messenger_messages',last.job_id)).body,/Thank you for picking up your order/);
+  });
  } finally { await db.close(); }
 });
