@@ -85,3 +85,9 @@ test('confirmation chips carry the full callback payload in the send body', () =
   const body = JSON.parse(manychatBody('28272978999035230', 'Please check your order', chips));
   assert.equal(body.data.content.quick_replies.length, 2); assert.equal(body.data.content.quick_replies[1].type, 'dynamic_block_callback');
 });
+test('closing and opt-out messages are recognized from fixed lists only', () => {
+  for (const text of ['salamat po', 'Ok salamat po!', 'sige po salamat', 'thanks', 'Thank you po 🙏', 'noted']) assert.equal(replyKind(text), 'closing');
+  for (const text of ['stop', 'Wag na po', 'ayoko na', 'UNSUBSCRIBE']) assert.equal(replyKind(text), 'opt_out');
+  for (const text of ['salamat pero 2 na lang', 'thanks, change to 7pm', 'cancel', 'stop the order of latte']) assert.equal(replyKind(text), null);
+  assert.equal(replyKind('ok po'), 'yes');
+});

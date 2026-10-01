@@ -46,10 +46,14 @@ export function confirmChips(url: string, connection: { id: string; secret: stri
     payload: { connection_id: connection.id, page_id: send.page_id, sender_id: send.recipient_id, code: send.code, action } }));
 }
 const YES = ['oo', 'oo po', 'opo', 'yes', 'yes po', 'sige', 'sige po', 'confirm', 'confirm po', 'ok po', 'okay po'];
+const CLOSING = ['salamat', 'salamat po', 'ok salamat', 'ok salamat po', 'sige salamat', 'sige po salamat', 'maraming salamat', 'maraming salamat po', 'thanks', 'thanks po', 'thank you', 'thank you po', 'ty', 'ok thanks', 'okay thanks', 'noted', 'noted po'];
+const OPT_OUT = ['stop', 'stop po', 'wag na', 'wag na po', 'huwag na', 'huwag na po', 'ayoko na', 'ayoko na po', 'unsubscribe'];
 export function replyKind(text: string, unsupported = false) {
   if (unsupported) return 'unclear';
   const words = text.toLowerCase().normalize('NFKD').replace(/[^\p{L}\p{N}\s]/gu, '').replace(/\s+/g, ' ').trim();
+  if (OPT_OUT.includes(words)) return 'opt_out';
   if (YES.includes(words)) return 'yes';
+  if (CLOSING.includes(words)) return 'closing';
   return !words || /^(ok|okay|k|h+m+|uh+m*|ah+|eh+)$/.test(words) ? 'unclear' : null;
 }
 export function summaryReply(text: string, unsupported: boolean, code: string | null | undefined, taglish: boolean) {

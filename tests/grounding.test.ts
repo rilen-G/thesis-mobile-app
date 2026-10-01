@@ -44,3 +44,19 @@ assert.equal(groundedReply({...one,language:'taglish'},g).body,'Anong oras po ni
 const timed={pickup_hour:10,pickup_minute:0,pickup_period:'am'};
 assert.equal(groundedReply({...one,...timed},g).body,'Will you pay cash or GCash for your 2 × Latte on pickup?');assert.equal(groundedReply({...one,...timed,language:'taglish'},g).body,'Cash po ba o GCash ang bayad sa 2 × Latte pag-pickup?');
 assert.equal(groundedReply({...two,...timed},g).body,'Will you pay cash or GCash for your 1 × Latte, 3 × Tea on pickup?');assert.notEqual(groundedReply(one,g).body,groundedReply(two,g).body);});
+test('follow-up templates: reminders with context, never the original question, final reminder for drafts',()=>{const order={...base,intent:'order',items:[{product_id:'latte',quantity:1}]};const timed={...order,pickup_hour:10,pickup_minute:0,pickup_period:'am'};
+const cases=[order,timed,{...timed,payment_method:'card'},{...base,intent:'order',items:[]},{...base,intent:'order',items:[{product_id:'latte',quantity:null}]},{...timed,payment_method:'Cash'},{...base,intent:'menu'},{...base,intent:'hours'},{...base,intent:'faq',source_ids:['pickup']},{...base,intent:'greeting',product_ids:[]}];
+for(const language of ['en','taglish'])for(const c of cases){const r=groundedReply({...c,language},ctx);assert.ok(r.followup,c.intent);assert.notEqual(r.followup!.fu1_body,r.body);assert.notEqual(r.followup!.fu1_body,r.followup!.fu2_body);}
+const pickup=groundedReply(order,ctx).followup!;assert.deepEqual([pickup.trigger,pickup.detail,pickup.product_ids],['incomplete','pickup',['latte']]);
+assert.equal(pickup.fu1_body,"Just a reminder: we're still waiting for your pickup time for your 1 × Latte. We're open until 10 PM.");
+assert.equal(groundedReply({...order,language:'taglish'},ctx).followup!.fu1_body,'Paalala lang po: hinihintay pa namin ang pickup time para sa 1 × Latte. Open po kami hanggang 10 PM.');
+assert.equal(groundedReply(timed,ctx).followup!.fu1_body,'Just a reminder: will you use Cash or GCash for your 1 × Latte?');
+assert.equal(groundedReply({...timed,language:'taglish'},ctx).followup!.fu1_body,'Paalala lang po: Cash o GCash po ba ang gagamitin niyo para sa 1 × Latte?');
+const draft=groundedReply({...timed,payment_method:'Cash'},ctx).followup!;assert.equal(draft.trigger,'draft');assert.match(draft.fu2_body,/^Final reminder: just reply "yes" to confirm your 1 × Latte for pickup at 10:00 AM/);
+assert.match(groundedReply({...timed,payment_method:'Cash',language:'taglish'},ctx).followup!.fu2_body,/^Huling paalala lang po:/);
+assert.equal(groundedReply({...base,intent:'menu',language:'taglish'},ctx).followup!.fu1_body,'Paalala lang po: ang Latte ay ₱150.00 at available pa po today. May tanong pa po ba kayo?');
+assert.equal(groundedReply({...base,intent:'menu'},ctx).followup!.fu1_body,'Just a reminder: Latte is ₱150.00 and still available today. Do you have any other questions?');
+assert.equal(groundedReply({...base,intent:'hours',language:'taglish'},ctx).followup!.fu1_body,'Paalala lang po: open kami hanggang 10 PM ngayon. May iba pa po ba kayong tanong?');
+assert.equal(groundedReply({...base,intent:'menu'},ctx).followup!.fu2_body,"We're open until 10 PM today if you'd like to order.");});
+test('no follow-up for escalations, delivery, existing orders, over-quantity, or closed pickup',()=>{const order={...base,intent:'order',items:[{product_id:'latte',quantity:1}]};
+for(const r of [groundedReply({...base,intent:'escalate'},ctx),groundedReply({...base,intent:'delivery'},ctx),groundedReply({...base,intent:'existing_order'},ctx),groundedReply({...order,items:[{product_id:'latte',quantity:3}]},ctx),groundedReply(order,{...ctx,now:'2026-09-15T14:30:00Z'}),groundedReply({...base,intent:'menu'},{...ctx,allocations:[{product_id:'latte',total:3,used:3}]})])assert.equal(r.followup,undefined);});

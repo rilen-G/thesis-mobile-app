@@ -4,7 +4,7 @@ import { backend } from '@/lib/supabase';
 import { pendingJournal, type PendingOperation } from '@/features/operations/pending';
 import type { Command } from '@/features/operations/domain';
 
-export type Connection = { id: string; page_name: string; page_id: string; enabled: boolean; verified_at: string | null;
+export type Connection = { id: string; page_name: string; page_id: string; enabled: boolean; followups_enabled: boolean; verified_at: string | null;
   last_inbound_at: string | null; last_accepted_at: string | null; worker_seen_at: string | null; version: number };
 export type Conversation = { id: string; sender_id: string; takeover: boolean; needs_attention: boolean; version: number;
   last_customer_at: string; updated_at: string; order_id: string | null };

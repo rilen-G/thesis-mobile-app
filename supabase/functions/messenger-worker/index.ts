@@ -36,7 +36,7 @@ async function process(connection: ConnectionConfig, work: Work) {
     try { extraction = JSON.parse(raw); } catch { console.error('gemini_unusable', candidate?.finishReason, generated.usageMetadata?.thoughtsTokenCount); throw new Error('provider'); }
     const reply = liveReply(extraction, ctx);
     if (reply.reason) console.error('reply_escalated', reply.reason);
-    await finish({ body: reply.body, draft: reply.draft, sources: reply.sources, attention: reply.outcome === 'escalated', language: reply.language });
+    await finish({ body: reply.body, draft: reply.draft, sources: reply.sources, attention: reply.outcome === 'escalated', language: reply.language, followup: reply.followup });
   } catch (error) {
     const name = error instanceof Error ? error.name : 'unknown';
     console.error('worker_process_failed', name, error instanceof Error && /^[a-z_]+$/.test(error.message) ? error.message : '');
@@ -60,6 +60,7 @@ async function drain() {
   const started = Date.now();
   for (const connection of connections()) {
     try {
+    await rpc(connection, 'followups').catch(() => console.error('messenger_followups_failed'));
     for (let count = 0; count < 4 && Date.now() - started < 45000; count++) {
       const work = await rpc<Work | null>(connection, 'claim');
       if (work) await process(connection, work);
