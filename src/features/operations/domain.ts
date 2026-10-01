@@ -30,6 +30,7 @@ export type Audit = { id: string; business_id: string; actor_id: string; action:
 export type Snapshot = { business: Business; role: Role; members: Member[]; products: Product[]; allocations: Allocation[]; customers: Customer[]; orders: OrderRecord[]; items: OrderItem[]; events: Audit[]; today: string };
 export type Command = { op: string; business_id?: string; [key: string]: unknown };
 export function money(value: number) { return `₱${(value / 100).toFixed(2)}`; }
+export function paymentLabel(value: string) { return /^g[\s-]?cash/i.test(value) ? 'GCash' : /^cash/i.test(value) ? 'Cash' : value; }
 export function parsePrice(value: string) {
   if (!/^\d{1,7}(\.\d{1,2})?$/.test(value.trim())) throw new Error('Enter a valid peso price with up to two decimal places.');
   const [whole, fraction = ''] = value.trim().split('.');

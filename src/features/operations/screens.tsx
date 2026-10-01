@@ -12,7 +12,7 @@ import { useOperations } from '@/state/operations';
 import { signOut } from '@/state/auth';
 import { colors, spacing, textStyles } from '@/theme/tokens';
 import { errorText, uploadPhoto } from './api';
-import { menuAvailability, menuCategories, money, parsePrice, pickupTimestamp, quantity, statusLabel, transitions, type MenuCategory, type Business, type Customer, type OrderRecord, type Product, type Status } from './domain';
+import { menuAvailability, menuCategories, money, parsePrice, paymentLabel, pickupTimestamp, quantity, statusLabel, transitions, type MenuCategory, type Business, type Customer, type OrderRecord, type Product, type Status } from './domain';
 import { Copy, DataScreen, ErrorNotice, FormCard, PendingSave, ProductPhoto, RejectStep, SuccessNotice, useMutation } from './ui';
 
 export function Dashboard() {
@@ -163,7 +163,7 @@ export function OrderDetail() {
 function NewOrder() {
   const {data}=useOperations();const mutation=useMutation();const [id]=useState(()=>Crypto.randomUUID());
   const [customerId,setCustomerId]=useState('');const [quantities,setQuantities]=useState<Record<string,string>>({});
-  const [time,setTime]=useState('');const [payment,setPayment]=useState('Cash on pickup');const [notes,setNotes]=useState('');const [error,setError]=useState<string|null>(null);
+  const [time,setTime]=useState('');const [payment,setPayment]=useState('Cash');const [notes,setNotes]=useState('');const [error,setError]=useState<string|null>(null);
   const products=data?.products.filter((p)=>p.active)??[];
   async function save(){try {setError(null);if(!customerId)throw new Error('Select a customer.');const items=products.map((p)=>({product_id:p.id,quantity:quantity(quantities[p.id]||'0')})).filter((i)=>i.quantity>0);if(!items.length)throw new Error('Select at least one item.');await mutation.run({op:'create_order',business_id:data!.business.id,id,customer_id:customerId,pickup_at:pickupTimestamp(data!.today,time),payment_method:payment,notes,items},()=>router.replace({pathname:'/(owner)/order/[id]',params:{id}}));}catch(failure){setError(errorText(failure));}}
   return <><FormCard><Text style={textStyles.title}>Customer</Text>{data?.customers.filter((c)=>!c.archived).map((c)=><AppButton key={c.id} label={c.name} variant={customerId===c.id?'primary':'secondary'} onPress={()=>setCustomerId(c.id)} />)}
@@ -179,7 +179,7 @@ function ExistingOrder({order}:{order:OrderRecord}) {
   const items=data?.items.filter((i)=>i.order_id===order.id)??[];
   return <><FormCard><View style={{alignItems:'flex-start',flexDirection:'row',gap:spacing.md,justifyContent:'space-between'}}><View style={{flex:1}}><Text style={{...textStyles.label,color:colors.terracotta}}>#{order.id.slice(0,8).toUpperCase()}</Text><Text style={[textStyles.title,{fontSize:20,marginTop:6}]}>{data?.customers.find((c)=>c.id===order.customer_id)?.name}</Text><Copy>Pickup · {order.business_date}</Copy></View><StatusBadge status={order.status} label={statusLabel[order.status]} /></View>
     {items.map((item)=><Copy key={item.id}>{item.quantity} × {item.name} · {money(item.price_centavos)} each</Copy>)}<Text style={textStyles.title}>Total {money(order.total_centavos)}</Text>
-    <Copy>Pickup: {new Date(order.pickup_at).toLocaleString('en-PH',{timeZone:'Asia/Manila'})}</Copy><Copy>Payment method: {order.payment_method} (not verified)</Copy><Copy>Special request: {order.notes||'None'}</Copy>{order.rejection_reason?<Copy>Rejection reason (sent to the customer): {order.rejection_reason}</Copy>:null}
+    <Copy>Pickup: {new Date(order.pickup_at).toLocaleString('en-PH',{timeZone:'Asia/Manila'})}</Copy><Copy>Payment method: {paymentLabel(order.payment_method)} (not verified)</Copy><Copy>Special request: {order.notes||'None'}</Copy>{order.rejection_reason?<Copy>Rejection reason (sent to the customer): {order.rejection_reason}</Copy>:null}
   </FormCard>
     {order.status==='confirmed'?<FormCard><FormField label="Pickup time (HH:MM)" value={time} onChangeText={setTime} /><FormField label="Payment method" value={payment} onChangeText={setPayment} />{order.reserved?null:<FormField label="Special request" multiline value={notes} onChangeText={setNotes} />}<ErrorNotice message={error??edit.error} />
       <AppButton label="Save confirmed details" disabled={edit.busy||mutation.busy} onPress={()=>{try{setError(null);void edit.run({op:'update_order',business_id:order.business_id,id:order.id,version:order.version,pickup_at:pickupTimestamp(order.business_date,time),payment_method:payment,notes});}catch(failure){setError(errorText(failure));}}} />

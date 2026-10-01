@@ -1,7 +1,7 @@
 /// <reference types="node" />
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { money, parsePrice, pickupTimestamp, quantity, transitions } from '../src/features/operations/domain';
+import { money, parsePrice, paymentLabel, pickupTimestamp, quantity, transitions } from '../src/features/operations/domain';
 import { pendingJournal } from '../src/features/operations/pending';
 
 test('money uses exact centavos and rejects malformed amounts',()=>{
@@ -29,4 +29,9 @@ test('pending save survives restart, keeps retry key, and isolates accounts',asy
  await assert.rejects(restarted.prepare({payload:{op:'create_order',id:'other'},requestId:'new'}),/uncertain result/);
  assert.equal(await pendingJournal(storage,'staff').read(),null);
  await restarted.clear();assert.equal(await first.read(),null);
+});
+test('payment methods display as Cash or GCash', () => {
+  for (const value of ['gcash', 'G-Cash po', 'GCASH']) assert.equal(paymentLabel(value), 'GCash');
+  for (const value of ['cash', 'Cash on pickup', 'cash po']) assert.equal(paymentLabel(value), 'Cash');
+  assert.equal(paymentLabel('Card'), 'Card');
 });

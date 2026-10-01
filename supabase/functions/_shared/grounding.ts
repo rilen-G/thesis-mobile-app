@@ -68,7 +68,8 @@ export function groundedReply(raw:unknown, ctx:Context):{body:string;draft:Draft
   if(time>last) return ask(`Pickup is only until ${close} today. What time before ${close}?`,`Hanggang ${close} lang po ang pickup today. Anong oras po bago mag-${close}?`);
   if(typeof e.payment_method!=='string'||!e.payment_method.trim()||e.payment_method.trim().length>80) return ask('Will you pay cash or GCash on pickup?','Cash po ba o GCash ang bayad pag-pickup?');
   const total=e.items.reduce((s,i)=>s+products.find(p=>p.id===i.product_id)!.price_centavos*i.quantity,0);
-  const draft={items:e.items,pickup_at:`${ctx.today}T${String(Math.floor(time/60)).padStart(2,'0')}:${String(time%60).padStart(2,'0')}:00+08:00`,payment_method:e.payment_method.trim(),notes:note};
+  const paid=e.payment_method.trim();
+  const draft={items:e.items,pickup_at:`${ctx.today}T${String(Math.floor(time/60)).padStart(2,'0')}:${String(time%60).padStart(2,'0')}:00+08:00`,payment_method:/^g[\s-]?cash/i.test(paid)?'GCash':/^cash/i.test(paid)?'Cash':paid,notes:note};
   return {body:`${fil?'Pakicheck po ng order niyo':'Please check your order'}:\n${e.items.map(i=>`${i.quantity} × ${products.find(p=>p.id===i.product_id)!.name}`).join('\n')}\n${money(total)} · pickup ${clock(time,true)} · ${draft.payment_method}${note?`\n${fil?'Note po':'Note'}: ${note}`:''}`,draft,sources:e.items.map(i=>({id:i.product_id,version:products.find(p=>p.id===i.product_id)!.version})),outcome:'validated',language};
  }
  return ask('Could you tell me which item, how many, or what you would like to ask?','Pakisabi po kung anong item, ilan, o ano ang tanong niyo.');
