@@ -15,11 +15,12 @@ export function normalizeMessage(value:unknown) {
  return value.normalize('NFC').trim();
 }
 export function groundedReply(raw:unknown, ctx:Context):{body:string;draft:Draft|null;sources:{id:string;version:number}[];outcome:'validated'|'escalated';language?:'en'|'taglish';reason?:string} {
- const fallback=(reason:string)=>({body:'I need the owner’s help with that. / Kailangan ko ng tulong ng owner para dito.',draft:null,sources:[],outcome:'escalated' as const,reason});
+ let fil=ctx.language==='taglish';
+ const fallback=(reason:string)=>({body:fil?'Ipapasa ko po ito sa owner para matulungan kayo.':'I’ll pass this to the owner so they can help you.',draft:null,sources:[],outcome:'escalated' as const,reason});
  if(!raw||typeof raw!=='object') return fallback('invalid_extraction');
  const e=raw as Extraction;
  if(!['greeting','menu','hours','faq','order','existing_order','clarify','escalate'].includes(e.intent)||!['en','fil','taglish'].includes(e.language)||!['product','quantity','pickup','payment','request','none'].includes(e.clarification)||!['am','pm','24h','none'].includes(e.pickup_period)||!['today','other'].includes(e.pickup_day)||(e.special_request!==null&&typeof e.special_request!=='string')||!Array.isArray(e.product_ids)||!Array.isArray(e.source_ids)||!Array.isArray(e.items)||e.items.length>100||e.product_ids.length>100||e.source_ids.length>8) return fallback('invalid_extraction');
- const fil=e.language==='fil'||(e.language==='taglish'&&ctx.language!=='en');
+ fil=e.language==='fil'||(e.language==='taglish'&&ctx.language!=='en');
  const language=fil?'taglish' as const:'en' as const;
  const ask=(en:string,tl:string)=>({body:fil?tl:en,draft:null,sources:[],outcome:'validated' as const,language});
  const products=ctx.products.filter(p=>p.active);
