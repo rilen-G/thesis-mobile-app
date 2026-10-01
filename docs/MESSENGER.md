@@ -94,6 +94,10 @@ Outgoing: the worker authorizes each attempt, sends it through ManyChat `POST /f
 
 Off by default; the owner turns them on per business in the Messenger screen. When the bot answers an inquiry, asks for a missing order detail, or sends a summary and the customer goes quiet, Follow-Up 1 is sent 30 minutes after the customer's message and Follow-Up 2 two hours later, at most two per case, only inside the 24-hour window and business hours. A customer reply, confirmation, opt-out ("stop", "wag na po"), takeover, pause, unavailable item, expired summary, or closed window stops the sequence. Closing messages ("salamat po", "thanks") get no reply. Each case is recorded in messenger_followups for the KPI tab.
 
+## Order timeout
+
+Off by default; the owner turns it on in the Messenger screen. A confirmed Messenger order that staff have not accepted or rejected shows a "Waiting N min" badge after 15 minutes. At the earliest of 30 minutes after confirmation (or after opening, if confirmed before opening), the pickup time, or the cutoff, an order that is still Confirmed becomes "Expired – Not Accepted", its reserved stock is restored, and the customer gets one message: a Yes/No offer to continue, a closing message if the order already came from a "Yes", or an apology if it is within 30 minutes of closing. "Yes" (tapped or typed) starts a new summary with the same items; "No" or no reply ends it. A new summary from "Yes" gets no follow-ups. Staff cannot revive an expired order. This is the only automatic order closure.
+
 ## Operating and acceptance limits
 
 - Owners alone see conversations and control takeover. Staff retain operational order access. No read receipts or push notifications are implemented.

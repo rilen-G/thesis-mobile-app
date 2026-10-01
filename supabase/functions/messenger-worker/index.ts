@@ -1,8 +1,9 @@
 import { schema, normalizeMessage, type Context } from '../_shared/grounding.ts';
-import { confirmationCode, confirmChips, liveReply, manychatBody, summaryReply, LIVE_SYSTEM_PROMPT } from '../_shared/messenger-domain.ts';
+import { confirmationCode, confirmChips, liveReply, manychatBody, resumeAnswer, resumeExtraction, summaryReply, LIVE_SYSTEM_PROMPT } from '../_shared/messenger-domain.ts';
 import { connections, equalSecret, respond, rpc, type ConnectionConfig } from '../_shared/messenger-runtime.ts';
 
 type Work = { message: { id: string; body: string; processing_token: string; error_code: string | null }; probe: boolean; summary: { code: string } | null;
+  resume: { order_id: string; code: string; pickup_at: string; payment_method: string; notes: string; items: { product_id: string; quantity: number }[] } | null;
   conversation: { order_id: string | null; reply_language?: 'en' | 'taglish' | null }; business: { id: string; version: number; opening_time: string; cutoff_time: string };
   products: Context['products']; knowledge: Context['knowledge']; allocations: Context['allocations']; history: { role: string; body: string }[] };
 async function process(connection: ConnectionConfig, work: Work) {
@@ -10,12 +11,19 @@ async function process(connection: ConnectionConfig, work: Work) {
     processing_token: work.message.processing_token, business_version: work.business.version, ...values });
   try {
     if (work.probe || confirmationCode(work.message.body)) { await finish({ body: 'Checking your confirmation.', sources: [] }); return; }
-    const direct = summaryReply(work.message.body, work.message.error_code === 'unsupported_message', work.summary?.code, work.conversation.reply_language === 'taglish');
+    const answer = work.resume ? resumeAnswer(work.message.body, work.resume.code) : null;
+    if (answer === 'no') { await finish({ resume_answer: 'no', resume_order: work.resume!.order_id }); return; }
+    const direct = answer ? null : summaryReply(work.message.body, work.message.error_code === 'unsupported_message', work.summary?.code, work.conversation.reply_language === 'taglish');
     if (direct) { await finish(direct); return; }
     const key = Deno.env.get('GEMINI_API_KEY'); if (!key) throw new Error('configuration');
     const now = new Date(); const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
     const ctx: Context = { business_id: work.business.id, business_version: work.business.version, products: work.products, knowledge: work.knowledge,
       allocations: work.allocations, today, opening: work.business.opening_time, cutoff: work.business.cutoff_time, now: now.toISOString(), language: work.conversation.reply_language };
+    if (answer === 'yes') {
+      const reply = liveReply(resumeExtraction(work.resume!, work.conversation.reply_language, ctx.now), ctx);
+      await finish({ body: reply.body, draft: reply.draft, sources: reply.sources, attention: reply.outcome === 'escalated', language: reply.language, resume_answer: 'yes', resume_order: work.resume!.order_id });
+      return;
+    }
     const history = work.history.map(m => ({ ...m, body: normalizeMessage(m.body) }));
     const model = Deno.env.get('GEMINI_MODEL') || 'gemini-2.5-flash';
     const body = JSON.stringify({ systemInstruction: { parts: [{ text: LIVE_SYSTEM_PROMPT }] }, contents: [{ role: 'user', parts: [{ text: JSON.stringify({ context: ctx, history }) }] }],
@@ -44,9 +52,10 @@ async function process(connection: ConnectionConfig, work: Work) {
   }
 }
 async function sendManychat(connection: ConnectionConfig, attempt_id: string) {
-  const auth = await rpc<{ allowed: boolean; text: string; recipient_id: string; page_id: string; code: string | null; language: string | null }>(connection, 'authorize', { attempt_id });
+  const auth = await rpc<{ allowed: boolean; text: string; recipient_id: string; page_id: string; code: string | null; resume_code: string | null; language: string | null }>(connection, 'authorize', { attempt_id });
   if (!auth.allowed) return;
-  const chips = auth.code ? confirmChips(`${Deno.env.get('SUPABASE_URL')}/functions/v1/messenger-ingest`, connection, { ...auth, code: auth.code }) : [];
+  const url = `${Deno.env.get('SUPABASE_URL')}/functions/v1/messenger-ingest`;
+  const chips = auth.code ? confirmChips(url, connection, { ...auth, code: auth.code }) : auth.resume_code ? confirmChips(url, connection, { ...auth, code: auth.resume_code }, 'resume') : [];
   const response = await fetch('https://api.manychat.com/fb/sending/sendContent', { method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${connection.api_key}` },
     body: manychatBody(auth.recipient_id, auth.text, chips), signal: AbortSignal.timeout(8000), redirect: 'error' }).catch(() => null);
@@ -60,6 +69,7 @@ async function drain() {
   const started = Date.now();
   for (const connection of connections()) {
     try {
+    await rpc(connection, 'expire_orders').catch(() => console.error('messenger_expire_orders_failed'));
     await rpc(connection, 'followups').catch(() => console.error('messenger_followups_failed'));
     for (let count = 0; count < 4 && Date.now() - started < 45000; count++) {
       const work = await rpc<Work | null>(connection, 'claim');
