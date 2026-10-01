@@ -88,7 +88,7 @@ function OrderCard({ order }: { order: OrderRecord }) {
   const actionLabel = transition === 'accepted' ? 'Accept' : transition === 'ready' ? 'Ready' : transition === 'completed' ? 'Received' : '';
   const open = () => router.push({ pathname: '/(owner)/order/[id]', params: { id: order.id } });
   const saveStatus = (status: Status) => mutation.run({ op: 'transition_order', business_id: order.business_id, id: order.id, version: order.version, status });
-  return <Pressable onPress={open}><Card style={styles.orderCard}>
+  return <Pressable disabled={rejecting} onPress={open}><Card style={styles.orderCard}>
     <View style={styles.statusFloat}><StatusBadge status={order.status} label={statusLabel[order.status]} /></View>
     <View style={{ paddingRight: 94 }}><Text style={styles.orderId}>#{order.id.slice(0, 8).toUpperCase()}</Text><Text style={styles.orderCustomer}>{customer?.name ?? 'Customer'}</Text><View style={styles.inline}><ShoppingBag color={colors.terracotta} size={14} /><Text style={styles.smallCopy}>Pickup</Text></View></View>
     <View style={styles.itemsSection}><Label>Items</Label>{items.map((item) => <View key={item.id} style={styles.itemRow}><Text style={styles.itemQty}>{item.quantity}×</Text><Text numberOfLines={1} style={styles.itemName}>{item.name}</Text><Text style={styles.itemPrice}>{money(item.price_centavos * item.quantity)}</Text></View>)}</View>
