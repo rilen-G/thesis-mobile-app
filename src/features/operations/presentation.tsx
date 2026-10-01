@@ -56,15 +56,20 @@ export function Dashboard() {
 
 const orderTabs: ('all' | Status)[] = ['all', 'confirmed', 'accepted', 'ready', 'completed', 'rejected', 'expired'];
 
-export function Orders() {
-  const { data, refresh } = useOperations();
-  const [filter, setFilter] = useState<'all' | Status>('all');
+function useFocusedRefresh() {
+  const { refresh } = useOperations();
   useFocusEffect(useCallback(() => {
     let active = true; let fetching = false;
     const poll = async () => { if (!active || fetching || AppState.currentState === 'background') return; fetching = true; try { await refresh(); } finally { fetching = false; } };
     void poll(); const interval = setInterval(() => { void poll(); }, 15000);
     return () => { active = false; clearInterval(interval); };
   }, [refresh]));
+}
+
+export function Orders() {
+  const { data } = useOperations();
+  const [filter, setFilter] = useState<'all' | Status>('all');
+  useFocusedRefresh();
   const orders = data?.orders.filter((order) => filter === 'all' || order.status === filter) ?? [];
   return <DataScreen>
     <ScrollView horizontal contentContainerStyle={styles.filterRow} showsHorizontalScrollIndicator={false} style={styles.edgeScroll}>
@@ -100,6 +105,7 @@ function OrderCard({ order }: { order: OrderRecord }) {
 
 export function Menu() {
   const { data } = useOperations();
+  useFocusedRefresh();
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<'All' | MenuCategory>('All');
 

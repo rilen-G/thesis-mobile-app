@@ -60,8 +60,12 @@ export async function uploadPhoto(businessId: string, productId: string, asset: 
   if (error) throw error;
   return path;
 }
+const signedPhotos = new Map<string, { url: string; until: number }>();
 export async function photoUrl(path: string) {
-  const { data, error } = await backend().storage.from('product-photos').createSignedUrl(path, 300);
+  const cached = signedPhotos.get(path);
+  if (cached && cached.until > Date.now()) return cached.url;
+  const { data, error } = await backend().storage.from('product-photos').createSignedUrl(path, 3600);
   if (error) throw error;
+  signedPhotos.set(path, { url: data.signedUrl, until: Date.now() + 55 * 60_000 });
   return data.signedUrl;
 }
