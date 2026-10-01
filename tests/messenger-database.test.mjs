@@ -188,7 +188,7 @@ await test('Messenger database boundaries and delivery recovery', async t => {
     await command(staff,{op:'transition_order',business_id:bid,id:order.id,version:order.version,status,reason:'test'});
     assert.equal(await used(),start);
     const notice=(await db.query("select body from public.messenger_messages where order_id=$1 and kind='status'",[order.id])).rows[0];
-    if(status==='rejected'){assert.equal(notice.body,'Pasensya na po, hindi po namin ma-accommodate ang order niyo: test');assert.equal((await row('orders',order.id)).rejection_reason,'test');}
+    if(status==='rejected'){assert.equal(notice.body,'Pasensya na po, hindi po namin ma-accommodate ang order niyo (1 × Coffee): test');assert.equal((await row('orders',order.id)).rejection_reason,'test');}
     else assert.match(notice.body,/Expired na po/);
     await send();
    }
@@ -208,7 +208,7 @@ await test('Messenger database boundaries and delivery recovery', async t => {
    await finish(work,{body:'Checking your confirmation.',confirm_code:work.summary.code});
    const orderId=(await row('messenger_summaries',summary.id)).order_id;assert.ok(orderId);await send();
    for(const next of ['accepted','ready','completed']) {const current=await row('orders',orderId);await command(staff,{op:'transition_order',business_id:bid,id:orderId,version:current.version,status:next});await send();}
-   assert.equal((await db.query("select body from public.messenger_messages where order_id=$1 and kind='status' order by seq desc limit 1",[orderId])).rows[0].body,'Thank you for picking up your order!');
+   assert.equal((await db.query("select body from public.messenger_messages where order_id=$1 and kind='status' order by seq desc limit 1",[orderId])).rows[0].body,'Thank you for picking up your order (1 × Coffee)!');
   });
   await t.test('an edited order invalidates the old summary so its code can no longer confirm',async()=>{
    await db.query('update public.daily_allocations set total=total+5 where product_id=$1',[product]);
@@ -227,8 +227,8 @@ await test('Messenger database boundaries and delivery recovery', async t => {
     await intake('CONFIRM '+summary.code,{sender_id:'322'});await finish(await svc('claim'));await send();
     return (await row('messenger_summaries',summary.id)).order_id;};
    const first=await place();const second=await place();assert.ok(first&&second&&first!==second);
-   const order=await row('orders',first);await command(staff,{op:'transition_order',business_id:bid,id:first,version:order.version,status:'rejected',reason:'test'});
-   assert.equal((await db.query("select count(*)::int n from public.messenger_messages where order_id=$1 and kind='status'",[first])).rows[0].n,1);await send();
+   const order=await row('orders',first);await command(staff,{op:'transition_order',business_id:bid,id:first,version:order.version,status:'rejected',reason:'Sold out'});
+   assert.deepEqual((await db.query("select body from public.messenger_messages where order_id=$1 and kind='status'",[first])).rows,[{body:"Sorry, we can't accommodate your order (1 × Coffee) because it's sold out today."}]);await send();
   });
  } finally { await db.close(); }
 });

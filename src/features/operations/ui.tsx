@@ -30,10 +30,14 @@ export function useMutation() {
   }
   return { run, busy, error, success };
 }
+const rejectReasons = ['Sold out', "Can't prepare by pickup time", 'Closing early', 'Other'];
 export function RejectStep({ order, onCancel }: { order: OrderRecord; onCancel: () => void }) {
-  const mutation = useMutation(); const [reason, setReason] = useState('');
-  return <><FormField label="Reason for rejection (the customer will see this)" value={reason} onChangeText={setReason} /><ErrorNotice message={mutation.error} />
-    <AppButton label="Confirm rejection" variant="danger" disabled={mutation.busy || !reason.trim()} onPress={(event) => { event.stopPropagation(); void mutation.run({ op: 'transition_order', business_id: order.business_id, id: order.id, version: order.version, status: 'rejected', reason: reason.trim() }); }} />
+  const mutation = useMutation(); const [choice, setChoice] = useState<string | null>(null); const [other, setOther] = useState('');
+  const reason = choice === 'Other' ? other.trim() : choice ?? '';
+  return <><Text style={textStyles.label}>Reason for rejection (the customer will see this)</Text>
+    {rejectReasons.map((label) => <AppButton key={label} compact label={label} variant={choice === label ? 'primary' : 'secondary'} onPress={(event) => { event.stopPropagation(); setChoice(label); }} />)}
+    {choice === 'Other' ? <FormField label="Other reason" value={other} onChangeText={setOther} /> : null}<ErrorNotice message={mutation.error} />
+    <AppButton label="Confirm rejection" variant="danger" disabled={mutation.busy || !reason} onPress={(event) => { event.stopPropagation(); void mutation.run({ op: 'transition_order', business_id: order.business_id, id: order.id, version: order.version, status: 'rejected', reason }); }} />
     <AppButton label="Cancel" variant="secondary" disabled={mutation.busy} onPress={(event) => { event.stopPropagation(); onCancel(); }} /></>;
 }
 export function DataScreen({ title, children, ownerOnly = false, detail = false }: { title?: string; children: ReactNode; ownerOnly?: boolean; detail?: boolean }) {
