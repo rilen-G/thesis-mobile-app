@@ -72,14 +72,22 @@ await test('Messenger database boundaries and delivery recovery', async t => {
    await command(owner,{op:'save_product',business_id:bid,id:product,version:0,name:'Coffee',price_centavos:15000,active:true});
    const day=(await db.query("select (now() at time zone 'Asia/Manila')::date::text as business_day")).rows[0].business_day;pickup=`${day}T23:59:00+08:00`;
    await command(owner,{op:'set_allocation',business_id:bid,id:product,version:0,business_date:day,total:2,reason:'test'});
+   await command(owner,{op:'save_product',business_id:bid,id:randomUUID(),version:0,name:'Tea',price_centavos:9000,active:true});
+   await as(owner,tx=>tx.query('select public.knowledge_command($1)',[{op:'knowledge',business_id:bid,id:randomUUID(),request_id:randomUUID(),version:0,title:'Pickup',body:'Collect at the counter.',approved:true}]));
    await intake('one coffee');const work=await svc('claim');
-   const reply=await finish(work,{body:'Review coffee',sources:[{id:product,version:1}],draft:{items:[{product_id:product,quantity:1}],pickup_at:pickup,payment_method:'cash'}});
+   assert.equal(work.history.at(-1).body,'one coffee');assert.ok(work.history.every(m=>typeof m.body==='string'));
+   assert.equal(work.knowledge[0].body,'Collect at the counter.');assert.equal(work.allocations[0].total,2);
+   const reply=await finish(work,{body:'Review coffee',sources:[{id:product,version:1}],draft:{items:[{product_id:product,quantity:1}],pickup_at:pickup,payment_method:'cash',notes:'less ice'}});
    await send();const summary=(await db.query('select * from public.messenger_summaries where message_id=$1',[reply.id])).rows[0];
-   await intake(`CONFIRM ${summary.code}`);await finish(await svc('claim'));await send();
+   await intake(`CONFIRM ${summary.code}`);const confirmed=await finish(await svc('claim'));await send();
+   assert.equal((await row('messenger_messages',confirmed.id)).body,'Your order (1 × Coffee) is confirmed and your items are reserved. We will message you when staff accepts it.');
    const saved=await row('messenger_summaries',summary.id);assert.ok(saved.order_id);
-   const order=await row('orders',saved.order_id);assert.equal(order.status,'confirmed');assert.equal(Number(order.total_centavos),15000);
-   assert.equal((await db.query('select used from public.daily_allocations where product_id=$1',[product])).rows[0].used,0);
-   await intake(`CONFIRM ${summary.code}`);await finish(await svc('claim'));await send();
+   const order=await row('orders',saved.order_id);assert.equal(order.status,'confirmed');assert.equal(Number(order.total_centavos),15000);assert.equal(order.notes,'less ice');
+   await assert.rejects(command(staff,{op:'update_order',business_id:bid,id:order.id,version:order.version,pickup_at:pickup,payment_method:'GCash',notes:''}),/messenger_order_locked/);
+   assert.deepEqual((await db.query('select product_id,name,quantity from public.order_items where order_id=$1',[order.id])).rows,[{product_id:product,name:'Coffee',quantity:1}]);
+   assert.equal(order.reserved,true);assert.equal((await db.query('select used from public.daily_allocations where product_id=$1',[product])).rows[0].used,1);
+   await intake(`CONFIRM ${summary.code}`);const again=await finish(await svc('claim'));await send();
+   assert.equal((await row('messenger_messages',again.id)).body,'Your order (1 × Coffee) is already confirmed. Staff will handle it.');
    assert.equal((await db.query('select count(*)::int n from public.orders')).rows[0].n,1);
    await command(staff,{op:'transition_order',business_id:bid,id:order.id,version:order.version,status:'accepted'});
    assert.equal((await db.query('select used from public.daily_allocations where product_id=$1',[product])).rows[0].used,1);
@@ -168,6 +176,187 @@ await test('Messenger database boundaries and delivery recovery', async t => {
    const paused=await row('messenger_connections',conn);await app('enabled',{enabled:true,version:paused.version});
    assert.equal(await svc('offer'),null);
    assert.equal((await db.query('select count(*)::int n from public.messenger_conversations where business_id=$1',[bid2])).rows[0].n,0);
+  });
+  await t.test('reserved confirmed orders restore stock when rejected or expired; replies follow the conversation language',async()=>{
+   const used=async()=>(await db.query('select used from public.daily_allocations where product_id=$1',[product])).rows[0].used;const start=await used();
+   for(const [sender,status] of [['310','rejected'],['311','expired']]) {
+    await intake('isang coffee po',{sender_id:sender});const work=await svc('claim');
+    const reply=await finish(work,{body:'Pakicheck po',sources:[{id:product,version:(await row('products',product)).version}],draft:{items:[{product_id:product,quantity:1}],pickup_at:pickup,payment_method:'cash'},language:'taglish'});
+    assert.doesNotMatch((await row('messenger_messages',reply.id)).body,/CONFIRM/);await send();
+    const summary=(await db.query('select * from public.messenger_summaries where message_id=$1',[reply.id])).rows[0];
+    await intake(`CONFIRM ${summary.code}`,{sender_id:sender});const confirmed=await finish(await svc('claim'));await send();
+    assert.equal((await row('messenger_messages',confirmed.id)).body,'Confirmed na po ang order niyo (1 × Coffee) at naka-reserve na ang items. Imi-message namin kayo pag in-accept na ng staff.');assert.equal(await used(),start+1);
+    const order=await row('orders',(await row('messenger_summaries',summary.id)).order_id);
+    await command(staff,{op:'transition_order',business_id:bid,id:order.id,version:order.version,status,reason:'test'});
+    assert.equal(await used(),start);
+    const notice=(await db.query("select body from public.messenger_messages where order_id=$1 and kind='status'",[order.id])).rows[0];
+    if(status==='rejected'){assert.equal(notice.body,'Pasensya na po, hindi po namin ma-accommodate ang order niyo (1 × Coffee): test');assert.equal((await row('orders',order.id)).rejection_reason,'test');}
+    else assert.match(notice.body,/Expired na po/);
+    await send();
+   }
+  });
+  await t.test('typed yes confirms and unclear replies re-ask without invalidating the pending summary',async()=>{
+   const version=async()=>(await row('products',product)).version;
+   await intake('coffee',{sender_id:'320'});let work=await svc('claim');
+   const reply=await finish(work,{body:'Please check your order',sources:[{id:product,version:await version()}],draft:{items:[{product_id:product,quantity:1}],pickup_at:pickup,payment_method:'cash'}});
+   const summary=(await db.query('select * from public.messenger_summaries where message_id=$1',[reply.id])).rows[0];
+   let offer=await svc('offer');let auth=await svc('authorize',offer);assert.equal(auth.code,summary.code);await svc('result',{...offer,outcome:'accepted'});
+   await intake('hmm',{sender_id:'320',reply_kind:'unclear'});assert.equal((await row('messenger_summaries',summary.id)).valid,true);
+   work=await svc('claim');assert.equal(work.summary.code,summary.code);await finish(work,{body:'Would you like to confirm this order?'});
+   offer=await svc('offer');assert.equal((await svc('authorize',offer)).code,summary.code);await svc('result',{...offer,outcome:'accepted'});
+   const sticker=await intake('',{sender_id:'320',unsupported:true,reply_kind:'unclear'});assert.equal((await row('messenger_messages',sticker.id)).state,'pending');
+   work=await svc('claim');assert.equal(work.message.error_code,'unsupported_message');assert.equal(work.summary.code,summary.code);await finish(work,{body:'Would you like to confirm this order?'});await send();
+   await intake('oo po',{sender_id:'320',reply_kind:'yes'});work=await svc('claim');
+   await finish(work,{body:'Checking your confirmation.',confirm_code:work.summary.code});
+   const orderId=(await row('messenger_summaries',summary.id)).order_id;assert.ok(orderId);await send();
+   for(const next of ['accepted','ready','completed']) {const current=await row('orders',orderId);await command(staff,{op:'transition_order',business_id:bid,id:orderId,version:current.version,status:next});await send();}
+   assert.equal((await db.query("select body from public.messenger_messages where order_id=$1 and kind='status' order by seq desc limit 1",[orderId])).rows[0].body,'Thank you for picking up your order (1 × Coffee)! Follow our Page for new menu updates.');
+  });
+  await t.test('an edited order invalidates the old summary so its code can no longer confirm',async()=>{
+   await db.query('update public.daily_allocations set total=total+5 where product_id=$1',[product]);
+   await intake('coffee',{sender_id:'321'});const work=await svc('claim');
+   const reply=await finish(work,{body:'Please check your order',sources:[{id:product,version:(await row('products',product)).version}],draft:{items:[{product_id:product,quantity:1}],pickup_at:pickup,payment_method:'cash'}});await send();
+   const summary=(await db.query('select * from public.messenger_summaries where message_id=$1',[reply.id])).rows[0];
+   await intake('make it 2 please',{sender_id:'321'});assert.equal((await row('messenger_summaries',summary.id)).valid,false);
+   const next=await svc('claim');assert.equal(next.summary,null);
+   await finish(next,{body:'Checking your confirmation.',confirm_code:summary.code});await send();
+   assert.equal((await row('messenger_summaries',summary.id)).order_id,null);
+  });
+  await t.test('a new order while another is active gets its own summary, order, and notices',async()=>{
+   const place=async()=>{await intake('coffee',{sender_id:'322'});const work=await svc('claim');
+    const reply=await finish(work,{body:'Please check your order',sources:[{id:product,version:(await row('products',product)).version}],draft:{items:[{product_id:product,quantity:1}],pickup_at:pickup,payment_method:'cash'}});await send();
+    const summary=(await db.query('select * from public.messenger_summaries where message_id=$1',[reply.id])).rows[0];assert.ok(summary);
+    await intake('CONFIRM '+summary.code,{sender_id:'322'});await finish(await svc('claim'));await send();
+    return (await row('messenger_summaries',summary.id)).order_id;};
+   const first=await place();const second=await place();assert.ok(first&&second&&first!==second);
+   const order=await row('orders',first);await command(staff,{op:'transition_order',business_id:bid,id:first,version:order.version,status:'rejected',reason:'Sold out'});
+   assert.deepEqual((await db.query("select body from public.messenger_messages where order_id=$1 and kind='status'",[first])).rows,[{body:"Sorry, we can't accommodate your order (1 × Coffee) because it's sold out today."}]);await send();
+  });
+  await t.test('only Cash or GCash summaries confirm; stale status notices are labelled superseded',async()=>{
+   const place=async(payment)=>{await intake('coffee',{sender_id:'323'});const work=await svc('claim');
+    const reply=await finish(work,{body:'Please check your order',sources:[{id:product,version:(await row('products',product)).version}],draft:{items:[{product_id:product,quantity:1}],pickup_at:pickup,payment_method:payment}});await send();
+    const summary=(await db.query('select * from public.messenger_summaries where message_id=$1',[reply.id])).rows[0];
+    await intake('CONFIRM '+summary.code,{sender_id:'323'});await finish(await svc('claim'));await send();
+    return (await row('messenger_summaries',summary.id)).order_id;};
+   assert.equal(await place('card'),null);
+   const id=await place('Cash');assert.ok(id);
+   for(const status of ['accepted','ready','completed']){const order=await row('orders',id);await command(staff,{op:'transition_order',business_id:bid,id,version:order.version,status});}
+   for(let i=0;i<2;i++){const offer=await svc('offer');assert.equal((await svc('authorize',offer)).allowed,false);assert.equal((await row('messenger_messages',offer.job_id)).error_code,'status_superseded');}
+   const last=await send();assert.match((await row('messenger_messages',last.job_id)).body,/Thank you for picking up your order/);
+  });
+  await t.test('follow-ups: off by default, timed FU1/FU2, responses, closing, opt-out, confirmation, and stop checks',async()=>{
+   const followup=trigger=>({trigger,detail:trigger==='incomplete'?'pickup':null,product_ids:[product],fu1_template:trigger+'_1',fu1_body:'FU1 '+trigger,fu2_template:trigger+'_2',fu2_body:'FU2 '+trigger});
+   const caseOf=async sender=>(await db.query('select f.* from public.messenger_followups f join public.messenger_conversations c on c.id=f.conversation_id where c.sender_id=$1 order by f.created_at desc limit 1',[sender])).rows[0];
+   const due=(id,column='fu1_due_at')=>db.query('update public.messenger_followups set '+column+"=now()-interval '1 second' where id=$1",[id]);
+   const state=async id=>{const g=await row('messenger_followups',id);return [g.status,g.end_reason];};
+   const open=async(sender,trigger='incomplete',draft=false)=>{await intake('order po',{sender_id:sender});const work=await svc('claim');
+    await finish(work,{body:'What time?',sources:draft?[{id:product,version:(await row('products',product)).version}]:[],followup:followup(trigger),...(draft?{draft:{items:[{product_id:product,quantity:1}],pickup_at:pickup,payment_method:'Cash'}}:{})});
+    await send();return caseOf(sender);};
+   const fu1=async(sender,trigger,draft)=>{const c=await open(sender,trigger,draft);await due(c.id);assert.equal((await svc('followups')).queued,1);await send();return row('messenger_followups',c.id);};
+   const reply=async(sender,text,extra={})=>{const r=await intake(text,{sender_id:sender,...extra});const w=await svc('claim');if(w){await finish(w);await send();}return r;};
+   await db.query('update public.daily_allocations set total=total+20 where product_id=$1',[product]);
+   assert.equal(await open('330'),undefined);
+   let connection=await row('messenger_connections',conn);assert.equal(connection.followups_enabled,false);
+   await assert.rejects(app('followups',{enabled:true,version:connection.version},staff),/permission_denied/);
+   await app('followups',{enabled:true,version:connection.version});
+   let c=await open('331');assert.equal(c.status,'eligible_first');assert.equal(new Date(c.fu1_due_at)-new Date(c.customer_at),30*60000);
+   assert.equal((await svc('followups')).queued,0);
+   await due(c.id);assert.equal((await svc('followups')).queued,1);
+   c=await row('messenger_followups',c.id);assert.equal(c.status,'first_sent');
+   const first=await row('messenger_messages',c.fu1_message_id);assert.equal(first.kind,'followup');assert.equal(first.body,'FU1 incomplete');
+   await send();await svc('followups');assert.equal((await row('messenger_followups',c.id)).status,'eligible_second');
+   assert.equal((await svc('followups')).queued,0);
+   await due(c.id,'fu2_due_at');assert.equal((await svc('followups')).queued,1);await send();
+   c=await row('messenger_followups',c.id);assert.equal(c.status,'second_sent');assert.equal((await row('messenger_messages',c.fu2_message_id)).body,'FU2 incomplete');
+   await due(c.id,'fu2_due_at');assert.equal((await svc('followups')).queued,0);
+   await db.query("update public.messenger_followups set fu1_sent_at=now()-interval '25 hours' where id=$1",[c.id]);await svc('followups');
+   assert.deepEqual(await state(c.id),['closed_no_response','no_response']);
+   c=await fu1('332','incomplete');await reply('332','7pm po');c=await row('messenger_followups',c.id);
+   assert.equal(c.status,'recovered');assert.ok(c.responded_at);assert.ok(c.response_seconds>=0);
+   c=await open('333');await reply('333','7pm po');assert.deepEqual(await state(c.id),['not_eligible','customer_replied']);
+   c=await open('334');const bye=await reply('334','salamat po',{reply_kind:'closing'});
+   assert.deepEqual(await state(c.id),['not_eligible','closing_message']);assert.equal((await row('messenger_messages',bye.id)).state,'done');
+   c=await fu1('335','inquiry');await reply('335','salamat po',{reply_kind:'closing'});
+   assert.equal((await row('messenger_followups',c.id)).status,'recovered');assert.ok((await row('messenger_followups',c.id)).responded_at);
+   c=await fu1('336','incomplete');const stop=await reply('336','stop',{reply_kind:'opt_out'});
+   assert.deepEqual(await state(c.id),['not_eligible','opt_out']);assert.ok((await row('messenger_followups',c.id)).responded_at);assert.equal((await row('messenger_messages',stop.id)).state,'done');
+   const skip=async(sender,setup,expected,undo)=>{const d=await open(sender);await setup(d);await due(d.id);await svc('followups');const result=await state(d.id);if(undo)await undo(d);assert.deepEqual(result,expected);};
+   await skip('337',async()=>{const v=await row('messenger_connections',conn);await app('enabled',{enabled:false,version:v.version});},['skipped_manual','ai_paused'],
+    async()=>{const v=await row('messenger_connections',conn);await app('enabled',{enabled:true,version:v.version});});
+   await skip('338',async d=>{const v=await row('messenger_conversations',d.conversation_id);await app('takeover',{conversation_id:v.id,version:v.version,takeover:true});},['skipped_manual','manual_handling']);
+   await skip('339',d=>db.query("update public.messenger_conversations set last_customer_at=now()-interval '25 hours' where id=$1",[d.conversation_id]),['skipped_window','window_expired']);
+   const used=(await db.query('select used from public.daily_allocations where product_id=$1',[product])).rows[0].used;
+   await skip('340',()=>db.query('update public.daily_allocations set used=total where product_id=$1',[product]),['skipped_unavailable','item_unavailable'],
+    ()=>db.query('update public.daily_allocations set used=$2 where product_id=$1',[product,used]));
+   await skip('341',()=>db.query("update public.businesses set opening_time=case when extract(hour from now() at time zone 'Asia/Manila')<22 then make_time(extract(hour from now() at time zone 'Asia/Manila')::int+1,0,0) else '00:00' end, cutoff_time=case when extract(hour from now() at time zone 'Asia/Manila')<22 then make_time(extract(hour from now() at time zone 'Asia/Manila')::int+2,0,0) else '01:00' end where id=$1",[bid]),
+    ['skipped_closed','business_closed'],()=>db.query("update public.businesses set opening_time='00:00',cutoff_time='23:59:59' where id=$1",[bid]));
+   c=await open('342','draft',true);
+   assert.equal((await db.query("select s.expires_at=(((now() at time zone 'Asia/Manila')::date+b.cutoff_time) at time zone 'Asia/Manila') ok from public.messenger_summaries s join public.businesses b on b.id=s.business_id where s.id=$1",[c.summary_id])).rows[0].ok,true);
+   await db.query('update public.messenger_summaries set valid=false where id=$1',[c.summary_id]);await due(c.id);await svc('followups');
+   assert.deepEqual(await state(c.id),['closed_no_response','draft_expired']);
+   c=await open('343','draft',true);const summary=await row('messenger_summaries',c.summary_id);await due(c.id);await svc('followups');
+   const offer=await svc('offer');assert.equal((await svc('authorize',offer)).code,summary.code);await svc('result',{...offer,outcome:'accepted'});
+   await reply('343','CONFIRM '+summary.code);c=await row('messenger_followups',c.id);assert.equal(c.status,'recovered');assert.ok(c.order_id);
+   c=await open('344','draft',true);await reply('344','CONFIRM '+(await row('messenger_summaries',c.summary_id)).code);
+   assert.deepEqual(await state(c.id),['not_eligible','confirmed']);assert.ok((await row('messenger_followups',c.id)).order_id);
+   c=await open('345');await due(c.id);await svc('followups');const queued=(await row('messenger_followups',c.id)).fu1_message_id;
+   await reply('345','7pm po');assert.equal((await row('messenger_messages',queued)).state,'suppressed');assert.deepEqual(await state(c.id),['not_eligible','customer_replied']);
+   c=await open('346');connection=await row('messenger_connections',conn);await app('followups',{enabled:false,version:connection.version});
+   assert.deepEqual(await state(c.id),['skipped_manual','disabled']);await due(c.id);assert.equal((await svc('followups')).queued,0);
+  });
+  await t.test('unaccepted-order timeout: off by default, deadline, staff wins, offer, yes/no, chain, before-closing apology, window',async()=>{
+   await db.query('update public.daily_allocations set total=total+20 where product_id=$1',[product]);
+   const used=async()=>(await db.query('select used from public.daily_allocations where product_id=$1',[product])).rows[0].used;
+   const summaryOf=async order=>(await db.query('select * from public.messenger_summaries where order_id=$1',[order])).rows[0];
+   const place=async sender=>{await intake('coffee',{sender_id:sender});const work=await svc('claim');
+    const reply=await finish(work,{body:'Please check your order',sources:[{id:product,version:(await row('products',product)).version}],draft:{items:[{product_id:product,quantity:1}],pickup_at:pickup,payment_method:'Cash'}});await send();
+    const s=(await db.query('select * from public.messenger_summaries where message_id=$1',[reply.id])).rows[0];
+    await intake('CONFIRM '+s.code,{sender_id:sender});await finish(await svc('claim'));await send();return (await row('messenger_summaries',s.id)).order_id;};
+   const age=(id,minutes)=>db.query("update public.orders set created_at=now()-make_interval(mins=>$2) where id=$1",[id,minutes]);
+   const notice=async id=>(await db.query("select * from public.messenger_messages where order_id=$1 and kind='status' order by seq desc limit 1",[id])).rows[0];
+   const hours=(opening,cutoff)=>db.query('update public.businesses set opening_time=$2,cutoff_time=$3 where id=$1',[bid,opening,cutoff]);
+   const id=await place('350');await age(id,31);assert.equal((await svc('expire_orders')).expired,0);assert.equal((await row('orders',id)).status,'confirmed');
+   let connection=await row('messenger_connections',conn);assert.equal(connection.order_timeout_enabled,false);
+   await assert.rejects(app('order_timeout',{enabled:true,version:connection.version},staff),/permission_denied/);
+   await app('order_timeout',{enabled:true,version:connection.version});
+   const before=await used();await age(id,20);await svc('expire_orders');assert.equal((await row('orders',id)).status,'confirmed');
+   await age(id,31);await svc('expire_orders');
+   let order=await row('orders',id);assert.deepEqual([order.status,order.expiry_reason],['expired','not_accepted']);assert.ok(order.resume_offered_at);assert.equal(await used(),before-1);
+   assert.equal((await notice(id)).body,"Sorry, we weren't able to confirm your order (1 × Coffee) in time. Would you like to continue?");
+   const offer=await svc('offer');assert.equal((await svc('authorize',offer)).resume_code,(await summaryOf(id)).code);await svc('result',{...offer,outcome:'accepted'});
+   await svc('expire_orders');assert.equal(await used(),before-1);
+   await assert.rejects(command(staff,{op:'transition_order',business_id:bid,id,version:order.version,status:'accepted'}),/invalid_transition/);
+   const accepted=await place('351');await command(staff,{op:'transition_order',business_id:bid,id:accepted,version:(await row('orders',accepted)).version,status:'accepted'});await send();
+   await age(accepted,31);await svc('expire_orders');assert.equal((await row('orders',accepted)).status,'accepted');
+   const capped=await place('352');await db.query("update public.orders set pickup_at=now()-interval '1 second' where id=$1",[capped]);await svc('expire_orders');
+   assert.equal((await row('orders',capped)).status,'expired');await send();
+   const hour=Number((await db.query("select extract(hour from now() at time zone 'Asia/Manila')::int h")).rows[0].h);
+   if(hour<22){const early=await place('353');await hours(String(hour+1).padStart(2,'0')+':00','23:59:59');await age(early,31);await svc('expire_orders');
+    assert.equal((await row('orders',early)).status,'confirmed');await hours('00:00','23:59:59');
+    await command(staff,{op:'transition_order',business_id:bid,id:early,version:(await row('orders',early)).version,status:'rejected',reason:'test'});await send();}
+   const late=await place('354');await db.query("update public.businesses set opening_time='00:00',cutoff_time=((now() at time zone 'Asia/Manila')::time+interval '10 minutes') where id=$1",[bid]);
+   await age(late,31);await svc('expire_orders');await hours('00:00','23:59:59');
+   order=await row('orders',late);assert.equal(order.status,'expired');assert.equal(order.resume_offered_at,null);
+   assert.equal((await notice(late)).body,"Sorry, we couldn't confirm your order (1 × Coffee) before closing. You're welcome to order again tomorrow.");
+   const apology=await svc('offer');assert.equal((await svc('authorize',apology)).resume_code,null);await svc('result',{...apology,outcome:'accepted'});
+   connection=await row('messenger_connections',conn);await app('followups',{enabled:true,version:connection.version});
+   await intake('oo po',{sender_id:'350',reply_kind:'yes'});let work=await svc('claim');assert.equal(work.resume.order_id,id);assert.equal(work.resume.code,(await summaryOf(id)).code);assert.equal(work.resume.items[0].quantity,1);
+   const resumed=await finish(work,{body:'Please check your order',sources:[{id:product,version:(await row('products',product)).version}],draft:{items:[{product_id:product,quantity:1}],pickup_at:pickup,payment_method:'Cash'},
+    resume_answer:'yes',resume_order:id,followup:{trigger:'draft',detail:null,product_ids:[product],fu1_template:'d1',fu1_body:'x',fu2_template:'d2',fu2_body:'y'}});await send();
+   assert.equal((await row('orders',id)).resume_answer,'yes');
+   assert.equal((await db.query('select count(*)::int n from public.messenger_followups where source_message_id=$1',[resumed.id])).rows[0].n,0);
+   const again=(await db.query('select * from public.messenger_summaries where message_id=$1',[resumed.id])).rows[0];
+   await intake('CONFIRM '+again.code,{sender_id:'350'});await finish(await svc('claim'));await send();
+   const second=(await row('messenger_summaries',again.id)).order_id;assert.equal((await row('orders',second)).resumed_from,id);
+   await age(second,31);await svc('expire_orders');order=await row('orders',second);assert.equal(order.status,'expired');assert.equal(order.resume_offered_at,null);
+   assert.equal((await notice(second)).body,"Sorry, our staff seem to be busy right now and we couldn't confirm your order (1 × Coffee). Please try again later or send us a message.");await send();
+   connection=await row('messenger_connections',conn);await app('followups',{enabled:false,version:connection.version});
+   const declined=await place('355');await age(declined,31);await svc('expire_orders');await send();
+   await intake('DECLINE '+(await summaryOf(declined)).code,{sender_id:'355'});work=await svc('claim');assert.equal(work.resume.order_id,declined);
+   assert.deepEqual(await finish(work,{resume_answer:'no',resume_order:declined}),{declined:true});assert.equal((await row('orders',declined)).resume_answer,'no');assert.equal(await svc('offer'),null);
+   const quiet=await place('356');const cv=(await db.query("select c.id from public.messenger_conversations c where c.sender_id='356'")).rows[0].id;
+   await db.query("update public.messenger_conversations set last_customer_at=now()-interval '25 hours' where id=$1",[cv]);await age(quiet,31);await svc('expire_orders');
+   assert.equal((await row('orders',quiet)).status,'expired');assert.equal((await notice(quiet)).state,'suppressed');
   });
  } finally { await db.close(); }
 });

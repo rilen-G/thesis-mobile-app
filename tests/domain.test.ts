@@ -1,7 +1,7 @@
 /// <reference types="node" />
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { money, parsePrice, pickupTimestamp, quantity, transitions } from '../src/features/operations/domain';
+import { money, orderLabel, parsePrice, paymentLabel, pickupTimestamp, quantity, transitions, waitingMinutes, type OrderRecord } from '../src/features/operations/domain';
 import { pendingJournal } from '../src/features/operations/pending';
 
 test('money uses exact centavos and rejects malformed amounts',()=>{
@@ -29,4 +29,15 @@ test('pending save survives restart, keeps retry key, and isolates accounts',asy
  await assert.rejects(restarted.prepare({payload:{op:'create_order',id:'other'},requestId:'new'}),/uncertain result/);
  assert.equal(await pendingJournal(storage,'staff').read(),null);
  await restarted.clear();assert.equal(await first.read(),null);
+});
+test('payment methods display as Cash or GCash', () => {
+  for (const value of ['gcash', 'G-Cash po', 'GCASH']) assert.equal(paymentLabel(value), 'GCash');
+  for (const value of ['cash', 'Cash on pickup', 'cash po']) assert.equal(paymentLabel(value), 'Cash');
+  assert.equal(paymentLabel('Card'), 'Card');
+});
+test('unaccepted orders: label and waiting time counted from the later of confirmation and opening', () => {
+  const order = { status: 'expired', expiry_reason: 'not_accepted', created_at: '2026-09-22T23:00:00Z', business_date: '2026-09-23' } as OrderRecord;
+  assert.equal(orderLabel(order), 'Expired – Not Accepted'); assert.equal(orderLabel({ ...order, expiry_reason: null }), 'Expired');
+  assert.equal(waitingMinutes(order, '08:00:00', Date.parse('2026-09-23T00:20:00Z')), 20);
+  assert.equal(waitingMinutes({ ...order, created_at: '2026-09-23T03:00:00Z' }, '08:00:00', Date.parse('2026-09-23T03:16:00Z')), 16);
 });

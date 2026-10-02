@@ -24,12 +24,15 @@ export function menuAvailability(product: Pick<Product, 'active'>, allocation?: 
   return { remaining, status };
 }
 export type Customer = { id: string; business_id: string; name: string; phone: string; notes: string; archived: boolean; version: number };
-export type OrderRecord = { id: string; business_id: string; customer_id: string; status: Status; total_centavos: number; pickup_at: string; business_date: string; payment_method: string; notes: string; created_at: string; version: number; restore_before_preparing: boolean };
+export type OrderRecord = { id: string; business_id: string; customer_id: string; status: Status; total_centavos: number; pickup_at: string; business_date: string; payment_method: string; notes: string; created_at: string; version: number; restore_before_preparing: boolean; reserved: boolean; rejection_reason: string | null; expiry_reason: string | null; resume_answer: string | null };
 export type OrderItem = { id: string; order_id: string; business_id: string; product_id: string; name: string; quantity: number; price_centavos: number };
 export type Audit = { id: string; business_id: string; actor_id: string; action: string; record_id: string; detail: Record<string, unknown>; created_at: string };
 export type Snapshot = { business: Business; role: Role; members: Member[]; products: Product[]; allocations: Allocation[]; customers: Customer[]; orders: OrderRecord[]; items: OrderItem[]; events: Audit[]; today: string };
 export type Command = { op: string; business_id?: string; [key: string]: unknown };
 export function money(value: number) { return `₱${(value / 100).toFixed(2)}`; }
+export function orderLabel(order: OrderRecord) { return order.status === 'expired' && order.expiry_reason === 'not_accepted' ? 'Expired – Not Accepted' : statusLabel[order.status]; }
+export function waitingMinutes(order: OrderRecord, opening: string, now: number) { return Math.floor((now - Math.max(Date.parse(order.created_at), Date.parse(`${order.business_date}T${opening}+08:00`))) / 60000); }
+export function paymentLabel(value: string) { return /^g[\s-]?cash/i.test(value) ? 'GCash' : /^cash/i.test(value) ? 'Cash' : value; }
 export function parsePrice(value: string) {
   if (!/^\d{1,7}(\.\d{1,2})?$/.test(value.trim())) throw new Error('Enter a valid peso price with up to two decimal places.');
   const [whole, fraction = ''] = value.trim().split('.');

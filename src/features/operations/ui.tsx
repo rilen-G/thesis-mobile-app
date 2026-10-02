@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { ActivityIndicator, Image, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, Text, View } from 'react-native';
 import * as Crypto from 'expo-crypto';
 import { CheckCircle2 } from 'lucide-react-native';
 import { AppButton } from '@/components/ui/app-button';
 import { AppScreen } from '@/components/layout/app-screen';
 import { Card } from '@/components/ui/card';
-import { colors, spacing, textStyles } from '@/theme/tokens';
+import { FormField } from '@/components/ui/form-field';
+import { colors, radii, spacing, textStyles } from '@/theme/tokens';
 import { command, errorText, photoUrl } from './api';
-import type { Command } from './domain';
+import type { Command, OrderRecord } from './domain';
 import { useOperations } from '@/state/operations';
 
 export function Copy({ children }: { children: ReactNode }) { return <Text style={textStyles.body}>{children}</Text>; }
@@ -28,6 +29,17 @@ export function useMutation() {
     } finally { await refreshPending(); locked.current = false; setBusy(false); }
   }
   return { run, busy, error, success };
+}
+const rejectReasons = ['Sold out', "Can't prepare by pickup time", 'Closing early', 'Other'];
+export function RejectStep({ order, onClose }: { order: OrderRecord; onClose: () => void }) {
+  const mutation = useMutation(); const [choice, setChoice] = useState<string | null>(null); const [other, setOther] = useState(''); const [open, setOpen] = useState(false);
+  const reason = choice === 'Other' ? other.trim() : choice ?? '';
+  return <><Text style={textStyles.label}>Reason for rejection (the customer will see this)</Text>
+    <Pressable accessibilityRole="button" accessibilityLabel="Choose a rejection reason" onPress={(event) => { event.stopPropagation(); setOpen(!open); }} style={{ backgroundColor: '#FFFAF4', borderColor: colors.line, borderRadius: radii.md, borderWidth: 1, justifyContent: 'center', minHeight: 48, paddingHorizontal: spacing.md }}><Text style={textStyles.body}>{choice ?? 'Choose a reason'} ▾</Text></Pressable>
+    {open ? rejectReasons.map((label) => <Pressable key={label} accessibilityRole="button" onPress={(event) => { event.stopPropagation(); setChoice(label); setOpen(false); }} style={{ paddingHorizontal: spacing.md, paddingVertical: spacing.sm }}><Text style={textStyles.body}>{label}</Text></Pressable>) : null}
+    {choice === 'Other' ? <FormField label="Other reason" value={other} onChangeText={setOther} /> : null}<ErrorNotice message={mutation.error} />
+    <AppButton label="Confirm rejection" variant="danger" disabled={mutation.busy || !reason} onPress={(event) => { event.stopPropagation(); void mutation.run({ op: 'transition_order', business_id: order.business_id, id: order.id, version: order.version, status: 'rejected', reason }, onClose); }} />
+    <AppButton label="Cancel" variant="secondary" disabled={mutation.busy} onPress={(event) => { event.stopPropagation(); onClose(); }} /></>;
 }
 export function DataScreen({ title, children, ownerOnly = false, detail = false }: { title?: string; children: ReactNode; ownerOnly?: boolean; detail?: boolean }) {
   const { data, loading, error, refresh, notice } = useOperations();

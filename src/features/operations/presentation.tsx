@@ -1,20 +1,20 @@
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import {
   AlertCircle, Banknote, CalendarDays, CheckCircle2, ChevronRight,
   Clock3, History, Megaphone, MessageCircle, MessageSquareText,
   Plus, Search, ShoppingBag, TrendingUp,
   UtensilsCrossed, WalletCards, ReceiptText,
 } from 'lucide-react-native';
-import { useMemo, useState, type ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { AppState, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { AppButton } from '@/components/ui/app-button';
 import { Card } from '@/components/ui/card';
 import { StatusBadge } from '@/features/orders/status-badge';
 import { useOperations } from '@/state/operations';
 import { colors, fonts, radii, textStyles } from '@/theme/tokens';
-import { filterMenu, menuAvailability, menuCategories, money, statusLabel, type MenuCategory, type OrderRecord, type Status } from './domain';
-import { Copy, DataScreen, ProductPhoto, useMutation } from './ui';
+import { filterMenu, menuAvailability, menuCategories, money, orderLabel, paymentLabel, statusLabel, waitingMinutes, type MenuCategory, type OrderRecord, type Status } from './domain';
+import { Copy, DataScreen, ProductPhoto, RejectStep, useMutation } from './ui';
 
 function Label({ children, color = colors.ink }: { children: ReactNode; color?: string }) {
   return <Text style={[styles.label, { color, flexShrink: 1 }]}>{children}</Text>;
@@ -56,9 +56,22 @@ export function Dashboard() {
 
 const orderTabs: ('all' | Status)[] = ['all', 'confirmed', 'accepted', 'ready', 'completed', 'rejected', 'expired'];
 
+function useFocusedRefresh() {
+  const { refresh } = useOperations();
+  useFocusEffect(useCallback(() => {
+    let active = true; let fetching = false;
+    const poll = async () => { if (!active || fetching || AppState.currentState === 'background') return; fetching = true; try { await refresh(); } finally { fetching = false; } };
+    void poll(); const interval = setInterval(() => { void poll(); }, 15000);
+    return () => { active = false; clearInterval(interval); };
+  }, [refresh]));
+}
+
 export function Orders() {
   const { data } = useOperations();
   const [filter, setFilter] = useState<'all' | Status>('all');
+  const [now, setNow] = useState(() => Date.now());
+  useFocusedRefresh();
+  useEffect(() => { const interval = setInterval(() => setNow(Date.now()), 30000); return () => clearInterval(interval); }, []);
   const orders = data?.orders.filter((order) => filter === 'all' || order.status === filter) ?? [];
   return <DataScreen>
     <ScrollView horizontal contentContainerStyle={styles.filterRow} showsHorizontalScrollIndicator={false} style={styles.edgeScroll}>
@@ -67,31 +80,35 @@ export function Orders() {
         return <Pressable key={status} onPress={() => setFilter(status)} style={[styles.chip, filter === status && styles.activeChip]}><Text style={[styles.chipText, filter === status && styles.activeChipText]}>{status === 'all' ? 'All' : statusLabel[status]} ({count})</Text></Pressable>;
       })}
     </ScrollView>
-    {orders.map((order) => <OrderCard key={order.id} order={order} />)}
+    {orders.map((order) => <OrderCard key={order.id} order={order} now={now} />)}
     {!orders.length ? <Card><Text style={styles.body}>No orders for this status.</Text></Card> : null}
   </DataScreen>;
 }
 
-function OrderCard({ order }: { order: OrderRecord }) {
+function OrderCard({ order, now }: { order: OrderRecord; now: number }) {
   const { data } = useOperations();
   const mutation = useMutation();
+  const [rejecting, setRejecting] = useState(false);
+  const waiting = order.status === 'confirmed' && order.reserved && data ? waitingMinutes(order, data.business.opening_time, now) : 0;
   const customer = data?.customers.find((item) => item.id === order.customer_id);
   const items = data?.items.filter((item) => item.order_id === order.id) ?? [];
   const transition = order.status === 'confirmed' ? 'accepted' : order.status === 'accepted' ? 'ready' : order.status === 'ready' ? 'completed' : null;
   const actionLabel = transition === 'accepted' ? 'Accept' : transition === 'ready' ? 'Ready' : transition === 'completed' ? 'Received' : '';
   const open = () => router.push({ pathname: '/(owner)/order/[id]', params: { id: order.id } });
-  const saveStatus = (status: Status) => mutation.run({ op: 'transition_order', business_id: order.business_id, id: order.id, version: order.version, status, reason: status === 'rejected' ? 'Rejected by staff' : '' });
-  return <Pressable onPress={open}><Card style={styles.orderCard}>
-    <View style={styles.statusFloat}><StatusBadge status={order.status} label={statusLabel[order.status]} /></View>
-    <View style={{ paddingRight: 94 }}><Text style={styles.orderId}>#{order.id.slice(0, 8).toUpperCase()}</Text><Text style={styles.orderCustomer}>{customer?.name ?? 'Customer'}</Text><View style={styles.inline}><ShoppingBag color={colors.terracotta} size={14} /><Text style={styles.smallCopy}>Pickup</Text></View></View>
+  const saveStatus = (status: Status) => mutation.run({ op: 'transition_order', business_id: order.business_id, id: order.id, version: order.version, status });
+  return <Pressable disabled={rejecting} onPress={open}><Card style={styles.orderCard}>
+    <View style={styles.statusFloat}><StatusBadge status={order.status} label={orderLabel(order)} /></View>
+    <View style={{ paddingRight: 94 }}><Text style={styles.orderId}>#{order.id.slice(0, 8).toUpperCase()}</Text><Text style={styles.orderCustomer}>{customer?.name ?? 'Customer'}</Text><View style={styles.inline}><ShoppingBag color={colors.terracotta} size={14} /><Text style={styles.smallCopy}>Pickup</Text></View>{waiting >= 15 ? <View style={styles.inline}><Clock3 color={colors.terracotta} size={14} /><Text style={[styles.smallCopy, styles.bold]}>Waiting {waiting} min</Text></View> : null}</View>
     <View style={styles.itemsSection}><Label>Items</Label>{items.map((item) => <View key={item.id} style={styles.itemRow}><Text style={styles.itemQty}>{item.quantity}×</Text><Text numberOfLines={1} style={styles.itemName}>{item.name}</Text><Text style={styles.itemPrice}>{money(item.price_centavos * item.quantity)}</Text></View>)}</View>
-    <View style={styles.detailLines}><Label>Order Details</Label><View style={styles.inline}><WalletCards color={colors.subtleText} size={14} /><Text style={[styles.smallCopy, styles.flexOne]}><Text style={styles.bold}>Payment:</Text> {order.payment_method}</Text></View><View style={styles.inline}><Clock3 color={colors.subtleText} size={14} /><Text style={[styles.smallCopy, styles.flexOne]}><Text style={styles.bold}>Pick up time:</Text> {valueDate(order.pickup_at)}</Text></View>{order.notes ? <View style={styles.inline}><MessageSquareText color={colors.subtleText} size={14} /><Text style={[styles.smallCopy, styles.flexOne]}>{order.notes}</Text></View> : null}</View>
-    <View style={styles.orderFooter}><View style={{ flexGrow: 1, minWidth: 92 }}><Text style={styles.totalLabel}>Total Amount</Text><Text style={styles.total}>{money(order.total_centavos)}</Text></View><View style={styles.orderActions}>{order.status === 'confirmed' ? <AppButton label="Reject" variant="secondary" disabled={mutation.busy} onPress={(event) => { event.stopPropagation(); open(); }} /> : null}{transition ? <AppButton label={actionLabel} disabled={mutation.busy || (transition === 'accepted' && !data?.business.rules_approved)} onPress={(event) => { event.stopPropagation(); void saveStatus(transition); }} /> : null}</View></View>
+    <View style={styles.detailLines}><Label>Order Details</Label><View style={styles.inline}><WalletCards color={colors.subtleText} size={14} /><Text style={[styles.smallCopy, styles.flexOne]}><Text style={styles.bold}>Payment:</Text> {paymentLabel(order.payment_method)}</Text></View><View style={styles.inline}><Clock3 color={colors.subtleText} size={14} /><Text style={[styles.smallCopy, styles.flexOne]}><Text style={styles.bold}>Pick up time:</Text> {valueDate(order.pickup_at)}</Text></View>{order.notes ? <View style={styles.inline}><MessageSquareText color={colors.subtleText} size={14} /><Text style={[styles.smallCopy, styles.flexOne]}>{order.notes}</Text></View> : null}</View>
+    <View style={styles.orderFooter}><View style={{ flexGrow: 1, minWidth: 92 }}><Text style={styles.totalLabel}>Total Amount</Text><Text style={styles.total}>{money(order.total_centavos)}</Text></View>{rejecting ? null : <View style={styles.orderActions}>{order.status === 'confirmed' ? <AppButton label="Reject" variant="secondary" disabled={mutation.busy} onPress={(event) => { event.stopPropagation(); setRejecting(true); }} /> : null}{transition ? <AppButton label={actionLabel} disabled={mutation.busy || (transition === 'accepted' && !data?.business.rules_approved)} onPress={(event) => { event.stopPropagation(); void saveStatus(transition); }} /> : null}</View>}</View>
+    {rejecting ? <RejectStep order={order} onClose={() => setRejecting(false)} /> : null}
   </Card></Pressable>;
 }
 
 export function Menu() {
   const { data } = useOperations();
+  useFocusedRefresh();
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<'All' | MenuCategory>('All');
 

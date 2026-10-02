@@ -12,8 +12,8 @@ import { useOperations } from '@/state/operations';
 import { signOut } from '@/state/auth';
 import { colors, spacing, textStyles } from '@/theme/tokens';
 import { errorText, uploadPhoto } from './api';
-import { menuAvailability, menuCategories, money, parsePrice, pickupTimestamp, quantity, statusLabel, transitions, type MenuCategory, type Business, type Customer, type OrderRecord, type Product, type Status } from './domain';
-import { Copy, DataScreen, ErrorNotice, FormCard, PendingSave, ProductPhoto, SuccessNotice, useMutation } from './ui';
+import { menuAvailability, menuCategories, money, orderLabel, parsePrice, paymentLabel, pickupTimestamp, quantity, statusLabel, transitions, type MenuCategory, type Business, type Customer, type OrderRecord, type Product, type Status } from './domain';
+import { Copy, DataScreen, ErrorNotice, FormCard, PendingSave, ProductPhoto, RejectStep, SuccessNotice, useMutation } from './ui';
 
 export function Dashboard() {
   const { data, loading, error, refresh } = useOperations();
@@ -72,7 +72,7 @@ function ProductEditor({item}:{item?:Product}) {
   const uploaded=useRef<{uri:string;path:string}|null>(null);
   const [version,setVersion]=useState(item?.version??0);
   async function choose() {
-    try { const result=await ImagePicker.launchImageLibraryAsync({mediaTypes:['images'],base64:true,quality:0.7,allowsEditing:true}); if(!result.canceled) {setPhoto(result.assets[0]);uploaded.current=null;} }
+    try { const result=await ImagePicker.launchImageLibraryAsync({mediaTypes:['images'],quality:1,allowsEditing:true}); if(!result.canceled) {setPhoto(result.assets[0]);uploaded.current=null;} }
     catch(failure){setError(errorText(failure));}
   }
   async function save() {
@@ -163,7 +163,7 @@ export function OrderDetail() {
 function NewOrder() {
   const {data}=useOperations();const mutation=useMutation();const [id]=useState(()=>Crypto.randomUUID());
   const [customerId,setCustomerId]=useState('');const [quantities,setQuantities]=useState<Record<string,string>>({});
-  const [time,setTime]=useState('');const [payment,setPayment]=useState('Cash on pickup');const [notes,setNotes]=useState('');const [error,setError]=useState<string|null>(null);
+  const [time,setTime]=useState('');const [payment,setPayment]=useState('Cash');const [notes,setNotes]=useState('');const [error,setError]=useState<string|null>(null);
   const products=data?.products.filter((p)=>p.active)??[];
   async function save(){try {setError(null);if(!customerId)throw new Error('Select a customer.');const items=products.map((p)=>({product_id:p.id,quantity:quantity(quantities[p.id]||'0')})).filter((i)=>i.quantity>0);if(!items.length)throw new Error('Select at least one item.');await mutation.run({op:'create_order',business_id:data!.business.id,id,customer_id:customerId,pickup_at:pickupTimestamp(data!.today,time),payment_method:payment,notes,items},()=>router.replace({pathname:'/(owner)/order/[id]',params:{id}}));}catch(failure){setError(errorText(failure));}}
   return <><FormCard><Text style={textStyles.title}>Customer</Text>{data?.customers.filter((c)=>!c.archived).map((c)=><AppButton key={c.id} label={c.name} variant={customerId===c.id?'primary':'secondary'} onPress={()=>setCustomerId(c.id)} />)}
@@ -174,19 +174,19 @@ function NewOrder() {
     </FormCard></>;
 }
 function ExistingOrder({order}:{order:OrderRecord}) {
-  const {data}=useOperations();const mutation=useMutation();const edit=useMutation();const [reason,setReason]=useState('');
+  const {data}=useOperations();const mutation=useMutation();const edit=useMutation();const [rejecting,setRejecting]=useState(false);
   const [time,setTime]=useState(new Date(order.pickup_at).toLocaleTimeString('en-GB',{timeZone:'Asia/Manila',hour:'2-digit',minute:'2-digit'}));const [payment,setPayment]=useState(order.payment_method);const [notes,setNotes]=useState(order.notes);const [error,setError]=useState<string|null>(null);
   const items=data?.items.filter((i)=>i.order_id===order.id)??[];
-  return <><FormCard><View style={{alignItems:'flex-start',flexDirection:'row',gap:spacing.md,justifyContent:'space-between'}}><View style={{flex:1}}><Text style={{...textStyles.label,color:colors.terracotta}}>#{order.id.slice(0,8).toUpperCase()}</Text><Text style={[textStyles.title,{fontSize:20,marginTop:6}]}>{data?.customers.find((c)=>c.id===order.customer_id)?.name}</Text><Copy>Pickup · {order.business_date}</Copy></View><StatusBadge status={order.status} label={statusLabel[order.status]} /></View>
+  return <><FormCard><View style={{alignItems:'flex-start',flexDirection:'row',gap:spacing.md,justifyContent:'space-between'}}><View style={{flex:1}}><Text style={{...textStyles.label,color:colors.terracotta}}>#{order.id.slice(0,8).toUpperCase()}</Text><Text style={[textStyles.title,{fontSize:20,marginTop:6}]}>{data?.customers.find((c)=>c.id===order.customer_id)?.name}</Text><Copy>Pickup · {order.business_date}</Copy></View><StatusBadge status={order.status} label={orderLabel(order)} /></View>
     {items.map((item)=><Copy key={item.id}>{item.quantity} × {item.name} · {money(item.price_centavos)} each</Copy>)}<Text style={textStyles.title}>Total {money(order.total_centavos)}</Text>
-    <Copy>Pickup: {new Date(order.pickup_at).toLocaleString('en-PH',{timeZone:'Asia/Manila'})}</Copy><Copy>Payment method: {order.payment_method} (not verified)</Copy><Copy>{order.notes||'No special request'}</Copy>
+    <Copy>Pickup: {new Date(order.pickup_at).toLocaleString('en-PH',{timeZone:'Asia/Manila'})}</Copy><Copy>Payment method: {paymentLabel(order.payment_method)} (not verified)</Copy><Copy>Special request: {order.notes||'None'}</Copy>{order.rejection_reason?<Copy>Rejection reason (sent to the customer): {order.rejection_reason}</Copy>:null}{order.expiry_reason==='not_accepted'?<Copy>Not accepted in time. Customer asked to continue: {order.resume_answer==='yes'?'Yes (new order started)':order.resume_answer==='no'?'No':'No reply'}</Copy>:null}
   </FormCard>
-    {order.status==='confirmed'?<FormCard><FormField label="Pickup time (HH:MM)" value={time} onChangeText={setTime} /><FormField label="Payment method" value={payment} onChangeText={setPayment} /><FormField label="Special request" multiline value={notes} onChangeText={setNotes} /><ErrorNotice message={error??edit.error} />
+    {order.status==='confirmed'&&!order.reserved?<FormCard><FormField label="Pickup time (HH:MM)" value={time} onChangeText={setTime} /><FormField label="Payment method" value={payment} onChangeText={setPayment} /><FormField label="Special request" multiline value={notes} onChangeText={setNotes} /><ErrorNotice message={error??edit.error} />
       <AppButton label="Save confirmed details" disabled={edit.busy||mutation.busy} onPress={()=>{try{setError(null);void edit.run({op:'update_order',business_id:order.business_id,id:order.id,version:order.version,pickup_at:pickupTimestamp(order.business_date,time),payment_method:payment,notes});}catch(failure){setError(errorText(failure));}}} />
     </FormCard>:null}
-    {transitions[order.status].filter((status)=>status!=='expired').length?<FormCard>{transitions[order.status].includes('rejected')?<FormField label="Reason (required for rejection)" value={reason} onChangeText={setReason} />:null}<ErrorNotice message={mutation.error} />
-      {transitions[order.status].filter((status)=>status!=='expired').map((status)=><AppButton key={status} disabled={mutation.busy||edit.busy||(status==='accepted'&&!data?.business.rules_approved)||(status==='rejected'&&!reason.trim())} label={status==='accepted'?'Accept':status==='completed'?'Received':statusLabel[status]} variant={status==='rejected'?'danger':'primary'} onPress={()=>{void mutation.run({op:'transition_order',business_id:order.business_id,id:order.id,version:order.version,status,reason});}} />)}
-      <Copy>{order.status==='confirmed'?'Acceptance checks availability and reserves quantity.':order.status==='accepted'?'A cancellation is recorded as Rejected and restores quantity under the saved policy.':'An unclaimed order remains Ready and is not counted as collected or completed.'}</Copy>
+    {transitions[order.status].filter((status)=>status!=='expired').length?<FormCard>{rejecting?<RejectStep order={order} onClose={()=>setRejecting(false)} />:<><ErrorNotice message={mutation.error} />
+      {transitions[order.status].filter((status)=>status!=='expired').map((status)=><AppButton key={status} disabled={mutation.busy||edit.busy||(status==='accepted'&&!data?.business.rules_approved)} label={status==='accepted'?'Accept':status==='rejected'?'Reject':status==='completed'?'Received':statusLabel[status]} variant={status==='rejected'?'danger':'primary'} onPress={()=>{if(status==='rejected')setRejecting(true);else void mutation.run({op:'transition_order',business_id:order.business_id,id:order.id,version:order.version,status});}} />)}
+      <Copy>{order.status==='confirmed'?(order.reserved?'Quantity was reserved when the customer confirmed. Rejecting restores it.':'Acceptance checks availability and reserves quantity.'):order.status==='accepted'?'A cancellation is recorded as Rejected and restores quantity under the saved policy.':'An unclaimed order remains Ready and is not counted as collected or completed.'}</Copy></>}
     </FormCard>:<Copy>This order has reached a final status.</Copy>}
     {data?.role==='owner'?<FormCard><Text style={textStyles.title}>Order history</Text>{data.events.filter((e)=>e.record_id===order.id).map((event)=><Copy key={event.id}>{new Date(event.created_at).toLocaleString()} · {event.action}{event.detail.from?` · ${event.detail.from} → ${event.detail.to}`:''}{event.detail.reason?` · ${event.detail.reason}`:''}</Copy>)}</FormCard>:null}
   </>;
@@ -214,7 +214,7 @@ function SettingsEditor({business}:{business:Business}) {
   return <><Text style={textStyles.title}>General</Text><FormCard><FormField label="Business name" value={name} onChangeText={setName} /><FormField label="Business address" value={address} onChangeText={setAddress} /></FormCard>
     <Text style={textStyles.title}>Order Handling</Text><FormCard>
     <FormField label="Opening time (HH:MM)" value={opening} onChangeText={(value)=>{setOpening(value);setApproved(false);}} /><FormField label="Pickup cutoff (HH:MM)" value={cutoff} onChangeText={(value)=>{setCutoff(value);setApproved(false);}} />
-    <Copy>Orders use same-day pickup in Asia/Manila. Staff acceptance checks the cutoff and reserves quantity. Unclaimed orders remain Ready and are not counted as completed.</Copy>
+    <Copy>Orders use same-day pickup in Asia/Manila. Staff acceptance checks the cutoff and reserves quantity; Messenger orders reserve it when the customer confirms. Unclaimed orders remain Ready and are not counted as completed.</Copy>
     <Copy>Restore quantity when an accepted order is rejected</Copy><Switch accessibilityLabel="Restore quantity when an accepted order is rejected" value={restore} onValueChange={(value)=>{setRestore(value);setApproved(false);}} />
     <Copy>I confirm these business rules and operating hours.</Copy><Switch accessibilityLabel="Approve business order rules" value={approved} onValueChange={setApproved} />
     </FormCard><Text style={textStyles.title}>AI Assistant</Text><FormCard>

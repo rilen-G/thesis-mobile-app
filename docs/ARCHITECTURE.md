@@ -39,7 +39,7 @@ Live Messenger intake, grounded replies, coded confirmation, owner inbox/takeove
 
 The outbound Zap must obtain single-use authorization from `messenger-dispatch` immediately before sending. It checks conversation revision, takeover, the 24-hour window, current sources, and current order status. Offered webhook jobs may be retried; authorized sends cannot. Provider callbacks record acceptance, not confirmed delivery. Unknown results block following sends until an owner reconciles them with evidence. A pause cannot retract a send already authorized.
 
-Exact `CONFIRM <8-character code>` replies confirm a current, provider-accepted summary with a 30-minute/pickup expiry. The database rechecks sources, rules, and availability, creates one operational order, and retains the summary as evidence. Quantity is deducted only by the existing staff-acceptance transaction. Order transitions enqueue notices transactionally. The owner-only `messenger_command` follows membership, version, audit, and idempotent request-journal rules. Staff continue seeing orders without live-chat access.
+Summaries carry Confirm / Change order quick replies on ManyChat; a tap, an exact short yes (oo, opo, yes, sige, confirm, ok po), or an internal `CONFIRM <8-character code>` confirms a current, provider-accepted summary with a 30-minute/pickup expiry. Unclear replies re-ask; any other message invalidates the summary. The database rechecks sources, rules, and availability, creates one operational order, and retains the summary as evidence. Quantity is deducted only by the existing staff-acceptance transaction. Order transitions enqueue notices transactionally. The owner-only `messenger_command` follows membership, version, audit, and idempotent request-journal rules. Staff continue seeing orders without live-chat access.
 
 ## Menu and daily quantities
 
@@ -60,7 +60,7 @@ Confirmed -> Expired
 Accepted  -> Rejected
 ```
 
-Confirmed means customer-confirmed and awaiting staff acceptance. It reserves no quantity. Acceptance checks current business hours, approved rules, same-day future pickup, active items, and availability, then reserves all items atomically. A failed item rolls back the entire acceptance; competing last-item requests cannot both succeed.
+Confirmed means customer-confirmed and awaiting staff acceptance. A Messenger `CONFIRM` reserves all items atomically and marks the order `reserved`; rejecting or expiring a reserved Confirmed order restores them. Manual orders reserve nothing until acceptance. Acceptance checks current business hours, approved rules, same-day future pickup, active items, and availability, then reserves all items atomically unless the order is already reserved. A failed item rolls back the entire acceptance; competing last-item requests cannot both succeed.
 
 Rejecting a Confirmed order restores nothing. Rejecting an Accepted order restores quantity exactly once only when its policy, captured at acceptance, permits restoration. Later settings changes do not rewrite that policy. Ready becomes Completed after collection/handoff; an unclaimed order stays Ready, does not restore quantity, and is excluded from completed sales. There are no separate Draft, Preparing, Cancelled, or Unclaimed order statuses.
 

@@ -87,6 +87,10 @@ function Inbox({ businessId }: { businessId: string }) {
           <AppButton label="I received the test reply" disabled={disabled || !connection.last_accepted_at} onPress={() => { void run({ op: 'verify' }); }} /></> :
           <AppButton label={connection.enabled ? 'Pause Messenger automation' : 'Enable Messenger automation'} disabled={disabled} onPress={() => { void run({ op: 'enabled', enabled: !connection.enabled, version: connection.version }); }} />}
         <Copy>Pausing stops queued actions. A send already authorized may still complete.</Copy>
+        {connection.verified_at ? <><AppButton label={connection.followups_enabled ? 'Turn off follow-ups' : 'Turn on follow-ups'} variant="secondary" disabled={disabled} onPress={() => { void run({ op: 'followups', enabled: !connection.followups_enabled, version: connection.version }); }} />
+          <Copy>Follow-ups send up to two reminders within 24 hours when a customer stops replying mid-inquiry or mid-order.</Copy>
+          <AppButton label={connection.order_timeout_enabled ? 'Turn off order timeout' : 'Turn on order timeout'} variant="secondary" disabled={disabled} onPress={() => { void run({ op: 'order_timeout', enabled: !connection.order_timeout_enabled, version: connection.version }); }} />
+          <Copy>Order timeout expires a confirmed Messenger order that staff have not accepted within 30 minutes (or by pickup or closing time) and asks the customer once whether to continue.</Copy></> : null}
       </> : <Copy>Messenger is not configured in the backend yet. Complete the Zapier setup guide to connect this business.</Copy>}
     </FormCard> : null}
     {!selected ? <>

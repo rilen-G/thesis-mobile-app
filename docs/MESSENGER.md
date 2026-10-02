@@ -1,6 +1,6 @@
 # Messenger and Zapier setup
 
-The app implements live Messenger intake, grounded replies, coded order confirmation, owner takeover/manual replies, and status messages. It does not implement promotional publishing or timed follow-ups. Approved knowledge is managed in Settings. Deployment and real Page acceptance are separate from local test results.
+The app implements live Messenger intake, grounded replies, coded order confirmation, owner takeover/manual replies, and status messages, and transactional follow-ups (off by default). It does not implement promotional publishing. Approved knowledge is managed in Settings. Deployment and real Page acceptance are separate from local test results.
 
 The fixed connection-test reply confirms transport only. The thesis-required Supabase RAG retrieval path is [still to be implemented](RAG.md); the current grounded reply path supplies a bounded approved-knowledge set to Gemini.
 
@@ -78,7 +78,25 @@ In Supabase Vault, create `messenger_project_url` and `messenger_worker_secret` 
 
 Open **Dashboard → Messenger inbox** (also linked from Settings). Send a new message from the configured tester. Check Zap A, Zap B, and receipt of the fixed test reply in Messenger. Click **I received the test reply**. The backend requires a recorded successful probe first. The connection remains paused until the owner clicks **Enable Messenger automation**.
 
-Exercise menu inquiries, a pickup order, `CONFIRM <8-character code>`, and staff acceptance/ready/received. Codes expire after 30 minutes or pickup time, whichever is earlier. Corrections invalidate old codes. A confirmed order reserves no quantity; staff acceptance performs the normal atomic allocation checks. After confirmation, further concerns are flagged for the owner rather than modifying the order automatically.
+Exercise menu inquiries, a pickup order, the Confirm / Change order chips (or a short yes such as "oo po"), and staff acceptance/ready/received. Summaries expire at the business cutoff on the same day (at most 24 hours); a confirmation also requires the pickup time to be in the future. Corrections invalidate old summaries. A confirmed order reserves its quantity immediately; staff acceptance keeps that reservation, and rejecting or expiring it before acceptance restores it. After confirmation, further concerns are flagged for the owner rather than modifying the order automatically.
+
+## ManyChat alternative
+
+A Page uses either Zapier or ManyChat (Pro plan), never both. Sections 2 and 5 apply unchanged, except that `probe_sender_id` is the tester's ManyChat contact ID, not a PSID. Zaps A and B are not used.
+
+In `MESSENGER_CONNECTIONS`, a ManyChat entry replaces `hook_url` with `"transport":"manychat"` and the Page's ManyChat API key: `{"id":"<connection UUID>","secret":"<random 32+ character secret>","transport":"manychat","api_key":"<ManyChat API key>"}`.
+
+Incoming: in ManyChat, add a **Default Reply** (every time) whose flow contains only an **External Request** action: POST to `https://<project>.supabase.co/functions/v1/messenger-ingest` with headers `Content-Type: application/json`, `x-messenger-connection`, and `x-messenger-secret`, and body **Full Contact Data**. Do not use a custom body: ManyChat does not escape inserted text containing quotes or line breaks. `messenger-ingest` keeps only `page_id`, `id` (sender), and `last_input_text`, and discards all other contact fields. ManyChat supplies no message ID, so the event ID is a hash of contact ID, `last_interaction`, and text; the server receive time is used for ordering. A message that is only a URL (a photo or attachment) is stored as an unsupported placeholder for owner review; the URL is not kept.
+
+Outgoing: the worker authorizes each attempt, sends it through ManyChat `POST /fb/sending/sendContent` without a message tag, and records `accepted` only when ManyChat returns `status: success`. Any other result is unknown and requires owner reconciliation. `messenger-dispatch` rejects ManyChat connections.
+
+## Follow-ups
+
+Off by default; the owner turns them on per business in the Messenger screen. When the bot answers an inquiry, asks for a missing order detail, or sends a summary and the customer goes quiet, Follow-Up 1 is sent 30 minutes after the customer's message and Follow-Up 2 two hours later, at most two per case, only inside the 24-hour window and business hours. A customer reply, confirmation, opt-out ("stop", "wag na po"), takeover, pause, unavailable item, expired summary, or closed window stops the sequence. Closing messages ("salamat po", "thanks") get no reply. Each case is recorded in messenger_followups for the KPI tab.
+
+## Order timeout
+
+Off by default; the owner turns it on in the Messenger screen. A confirmed Messenger order that staff have not accepted or rejected shows a "Waiting N min" badge after 15 minutes. At the earliest of 30 minutes after confirmation (or after opening, if confirmed before opening), the pickup time, or the cutoff, an order that is still Confirmed becomes "Expired – Not Accepted", its reserved stock is restored, and the customer gets one message: a Yes/No offer to continue, a closing message if the order already came from a "Yes", or an apology if it is within 30 minutes of closing. "Yes" (tapped or typed) starts a new summary with the same items; "No" or no reply ends it. A new summary from "Yes" gets no follow-ups. Staff cannot revive an expired order. This is the only automatic order closure.
 
 ## Operating and acceptance limits
 

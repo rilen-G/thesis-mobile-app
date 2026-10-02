@@ -4,7 +4,7 @@ Deno.serve(async (req: Request) => {
   if (req.method !== 'POST') return respond({ error: 'Method not allowed' }, 405);
   try {
     const connection = await authenticate(req);
-    if (!connection) return respond({ error: 'Unauthorized' }, 401);
+    if (!connection || connection.transport === 'manychat') return respond({ error: 'Unauthorized' }, 401);
     const body = await readBody(req);
     if (!['authorize', 'result'].includes(String(body.op)) || typeof body.attempt_id !== 'string' || !/^[0-9a-f-]{36}$/i.test(body.attempt_id)) return respond({ error: 'Invalid attempt' }, 400);
     if (body.op === 'result' && !['accepted', 'unknown'].includes(String(body.outcome))) return respond({ error: 'Invalid outcome' }, 400);
