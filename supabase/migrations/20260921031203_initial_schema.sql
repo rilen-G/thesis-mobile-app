@@ -1,5 +1,5 @@
--- Application baseline, consolidated 2026-09-21.
--- Recreates the eight-migration application schema; contains no tenant/demo records.
+-- Fresh-install application baseline, revised 2026-10-04.
+-- Business operations and approved knowledge only; contains no tenant/demo records.
 -- Supabase supplies auth/storage schemas. Do not run against an existing application schema.
 
 --
@@ -277,7 +277,8 @@ begin
       end loop;
     end if;
 
-    update public.orders set status=next_status,version=version+1 where id=rid;
+    update public.orders set status=next_status,version=version+1,
+      rejection_reason=case when next_status='rejected' then left(btrim(payload->>'reason'),500) else rejection_reason end where id=rid;
     detail:=jsonb_build_object('from',ord.status,'to',next_status,'reason',left(payload->>'reason',500));
   end if;
 
@@ -527,6 +528,7 @@ CREATE TABLE public.orders (
     business_date date NOT NULL,
     payment_method text NOT NULL,
     notes text DEFAULT ''::text NOT NULL,
+    rejection_reason text,
     restore_before_preparing boolean DEFAULT false NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     version integer DEFAULT 1 NOT NULL,

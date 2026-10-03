@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Crypto from 'expo-crypto';
-import { backend } from '@/lib/supabase';
+import { backend, backendIdentity } from '@/lib/supabase';
 import { pendingJournal, type PendingOperation } from '@/features/operations/pending';
 import type { Command } from '@/features/operations/domain';
 
@@ -12,7 +12,7 @@ export async function readKnowledge(businessId: string) {
 async function journal() {
   const { data } = await backend().auth.getSession();
   if (!data.session) throw new Error('Sign in before saving.');
-  return pendingJournal(AsyncStorage, `knowledge.${data.session.user.id}`);
+  return pendingJournal(AsyncStorage, `knowledge.${data.session.user.id}`, backendIdentity);
 }
 export async function pendingKnowledge(): Promise<PendingOperation | null> { return (await journal()).read(); }
 let writing = false;

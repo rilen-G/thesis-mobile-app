@@ -1,26 +1,31 @@
-# App Name
+# Thesis Foodservice App
 
-Android-first Expo / React Native application for the thesis **Development of AI-Agentic Digital Marketing and Chat-Based App for Philippine Micro and Small Foodservice Establishments**.
+Android-first Expo / React Native application for **Development of AI-Agentic Digital Marketing and Chat-Based App for Philippine Micro and Small Foodservice Establishments**.
 
-The app supports Supabase authentication, business membership, menu and private photos, customers, manual orders, daily quantities, owner-managed approved knowledge, and a disabled-by-default live Messenger integration through Zapier. Gemini runs on the backend. Messenger requires backend deployment, Zap configuration, and Page verification; see [Messenger setup](docs/MESSENGER.md). Automated publishing, promotional export, and timed follow-ups remain planned work.
+The working name is temporary. **BuckStar** is the research test business, not the app name.
 
-## Documentation
+## Current application
 
-- [Setup](docs/SETUP.md): environment, database, accounts, AI configuration, and builds.
-- [Architecture](docs/ARCHITECTURE.md): code layout, permissions, order rules, and chat behavior.
-- [Roadmap](docs/ROADMAP.md): current scope, remaining work, and decisions.
-- [Validation](docs/VALIDATION.md): test commands, recorded evidence, and research gates.
+Supabase authentication, owner/staff membership, menu/categories and private photos, customers, manual orders, daily quantities, audit history, recovery of uncertain saves, and owner-approved business knowledge are implemented. Confirmed orders reserve nothing; staff acceptance checks and allocates stock atomically.
 
-Business records belong in Supabase Database; product images belong in private Supabase Storage. The repository contains application code, one initial schema migration, and purposeful tests. Buckstars is fictional hosted demonstration data, not bundled application content.
+Direct Meta Messenger integration, the chatbot, follow-ups, Apify imports, query-specific RAG, promotional generation, template editing and export are **deferred**. Their screens show unavailable states. The retained grounding helper is a tested foundation, not a running AI service.
 
-## Checks
+Future content will be copied or exported for manual Facebook posting. Automatic Page publishing is excluded. Graphics must preserve actual owner-uploaded food photos.
 
-```powershell
+## Start and checks
+
+Read [the project guide](docs/README.md), then [Setup](docs/SETUP.md). Use npm; package-lock.json is authoritative.
+
+~~~powershell
+npm ci
+npm start
 npm run typecheck
 npm run lint
 npm test
 npm run test:postgres
 npm run doctor
-```
+~~~
 
-Database tests use disposable local databases. Hosted checks and AI evaluations are separate, explicit commands documented in [Validation](docs/VALIDATION.md). Commits and pushes require the repository owner's instruction.
+Migrations are a **fresh-install baseline**, not an upgrade for the previous deployment. This cleanup does not provision/reset a hosted project or retire deployed services. See Setup for the later cutover.
+
+Continue in the existing GitHub repository with ordinary commits/pushes when instructed. No new repository, history rewrite or force-push is planned. Earlier commits remain in history.

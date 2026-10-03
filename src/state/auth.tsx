@@ -31,7 +31,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async function handleUrl(url: string) {
       if (seen.has(url)) return;
       const parsed = new URL(url);
-      if (!(parsed.protocol === 'qfacio:' || parsed.protocol === 'exp:' || parsed.protocol === 'http:' || parsed.protocol === 'https:')) return;
+      if (!(parsed.protocol === 'thesisfoodservice:' || parsed.protocol === 'exp:' || parsed.protocol === 'http:' || parsed.protocol === 'https:')) return;
       const code = parsed.searchParams.get('code');
       if (!code) return;
       seen.add(url);

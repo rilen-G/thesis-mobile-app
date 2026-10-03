@@ -5,6 +5,7 @@ import { AppState, Platform } from 'react-native';
 
 const url = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const key = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+export const backendIdentity = (url ?? 'unconfigured').replace(/\/+$/, '');
 export const backendConfigured = Boolean(url && key && !url.includes('YOUR_PROJECT') && !key.includes('YOUR_'));
 
 // Expo Router renders the web bundle once in Node before hydrating it in the
@@ -19,7 +20,7 @@ const authStorage = {
   removeItem: (storageKey: string) => { if (!isSSR) return AsyncStorage.removeItem(storageKey); },
 };
 export const supabase = backendConfigured ? createClient(url!, key!, {
-  auth: { storage: authStorage, persistSession: true, autoRefreshToken: true, detectSessionInUrl: false, lock: processLock, flowType: 'pkce' },
+  auth: { storage: authStorage, storageKey: `thesis-foodservice.auth.${encodeURIComponent(backendIdentity)}`, persistSession: true, autoRefreshToken: true, detectSessionInUrl: false, lock: processLock, flowType: 'pkce' },
 }) : null;
 if (supabase && Platform.OS !== 'web') {
   const client = supabase;

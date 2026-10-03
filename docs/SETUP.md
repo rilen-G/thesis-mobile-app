@@ -1,85 +1,64 @@
 # Setup
 
-## Run the application
+## Local app
 
-Install Node.js and dependencies with `npm install`. `package-lock.json` is authoritative; inspect `package.json` before choosing compatible Expo packages. Use `npx expo install` for native dependencies.
+Use npm and the authoritative package-lock.json:
 
-Create an untracked `.env` in `mobile/`:
+~~~powershell
+npm ci
+npm start
+~~~
 
-```dotenv
+Use npm run web for browser development and npx expo install for native dependencies.
+
+Copy .env.example to an untracked .env:
+
+~~~dotenv
 EXPO_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
 EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLIC_CLIENT_KEY
-```
+~~~
 
-Only public client configuration belongs here. Provider keys, database passwords, and service-role credentials must stay on the backend. Restart Expo after changing environment values.
+Restart Expo after changing values. Missing configuration shows a setup state; no sample-data fallback exists. A phone must reach the backend over the network; localhost on the phone means the phone itself.
 
-Run `npm start` for Expo Go or `npm run web` for the browser. A physical phone must reach the backend over the network: `localhost` on the phone refers to the phone itself. A missing backend shows a setup state; the app has no sample-data fallback.
+No Gemini, Meta or Apify secret is required by the current app. Future provider secrets belong on the backend.
 
-## Database
+## Fresh database baseline
 
-The existing development project is **Thesis** (`vfrgfhpvwxtraolrcryo`). Confirm the target before any hosted command; do not link to another project merely because it appears in a connected account.
+The retained migrations create business operations, private product storage and approved-knowledge editing. They exclude conversation transport, sending jobs, follow-up schedules, embeddings and content-generation tables.
 
-`supabase/migrations/20260921031203_initial_schema.sql` is the consolidated baseline for a fresh database. It includes tables, constraints, indexes, functions, permissions, RLS, and the private `product-photos` bucket. It contains no business accounts, menu items, customers, orders, or uploaded images.
+**Apply this chain only to a fresh Supabase database.** It is not an incremental upgrade for the previous deployment. Do not apply it to an existing application schema, alter hosted migration history to make it fit, or reset a hosted database to silence differences.
 
-For a **new, empty development project**, inspect the installed CLI help, link the intended project, review `db push --dry-run`, and apply the baseline through the CLI migration workflow. Keep `private` out of the Data API exposed schemas. The app uses public RPC wrappers with privileged implementation functions in `private`.
+For local Supabase, inspect current CLI help before local start/reset commands; its container runtime is required. npm test uses disposable local PGlite databases without a hosted project.
 
-For the **existing Thesis project**, do not execute the baseline against its existing tables and do not reset the hosted database to clean migration files. Consolidation reconciles migration history after verifying equivalence; application data stays in place. Subsequent schema changes belong in new timestamped migrations created with `supabase migration new <name>`. One baseline is the starting point, not a reason to overwrite deployed schema definitions later.
+Later hosted cutover:
 
-A full local Supabase stack requires Docker. `supabase db reset --local` rebuilds that local database from migrations and the empty seed file. `--linked` targets the hosted project and is destructive. The lightweight/native database test suites do not require Docker and never use the hosted project.
+1. Provision the fresh research project after confirming organization, cost and ownership.
+2. Explicitly verify the target. Existing ignored CLI link metadata and .env may still point at the earlier deployment.
+3. Apply the baseline to the empty target; verify RLS with two business accounts.
+4. Create new owner/staff accounts and BuckStar through the app. Enter verified menu facts and owner photos; do not import past conversations or generated demonstration photos.
+5. Configure recovery URLs, update public configuration and sign in again. Auth/journals are separated by backend.
+6. Before new Messenger testing, retire earlier webhook subscriptions, deployed handlers, schedules and credentials through a separately authorized cutover. Deleting source files does not stop hosted jobs.
 
-Auth configuration, Edge Function secrets/deployment, uploaded Storage bytes, and tenant data are separate from the schema migration. A database migration is not a complete project backup.
+Keep the original hosted environment intact until the replacement is verified. Database backups do not include Storage image bytes.
 
-## Owner, staff, and recovery
+## Accounts and recovery
 
-1. Configure hosted email confirmation, a minimum eight-character password, and appropriate email delivery. Register and verify the owner, sign in, and create a business.
-2. In Settings, enter the business name/address, opening time, pickup cutoff, and explicitly approve the order rules.
-3. Register and verify a separate staff account without creating another business. The owner adds its email in Settings; staff refreshes membership or signs in again.
-4. Remove staff through Settings when needed. Database membership checks apply immediately even if an access token still exists. Ownership transfer and account deletion require a separate administrative procedure.
+Register and verify an owner, then create the business. Staff register separately without creating another business; the owner adds their verified email in Settings. Membership removal blocks subsequent database access.
 
-Allow the exact recovery callback URLs in Supabase Auth. Development builds use `qfacio://recovery` or `qfacio:///recovery`; Expo Go uses the current device/LAN URL from `Linking.createURL('/recovery')`; web uses its actual origin plus `/recovery`. Open PKCE verification/recovery links on the device/browser that requested them. Expired links or links opened on another device require a fresh request there.
+Allow exact Auth recovery callbacks: thesisfoodservice://recovery and thesisfoodservice:///recovery for native builds, the actual web origin plus /recovery, and the current Expo Go URL produced by Linking.createURL('/recovery'). PKCE links must open on the requesting device/browser.
 
-## Product photos and demo data
+The new auth namespace may require sign-in again. Reconcile uncertain old saves in their original environment before switching; do not transfer journals.
 
-Photos are stored in the private `product-photos` bucket, with a 5 MB limit and JPEG/PNG/WebP types. Database records store `photo_path`. Paths are immutable `business/product/upload` references; owners upload and business members retrieve short-lived signed URLs. Clients cannot overwrite or delete objects.
+## Photos and knowledge
 
-Buckstars is a fictional development business. Its menu, prices, categories, FAQs, settings, and quantities are held in Supabase. All twelve AI-generated product photos are stored privately. Source copies for the eight later menu additions are retained under `assets/buckstars/`; the app retrieves their immutable Storage objects through short-lived signed URLs and does not import the local copies. The original local catalog, four photographs, and one-time seed/expansion scripts remain cleanup recovery material. Manage ongoing changes through the app. Initialize operational quantities explicitly for each business date.
+The private product-photos bucket accepts JPEG/PNG/WebP up to 5 MB. Current menu uploads create resized JPEGs at immutable business/product/upload paths. Owners upload actual food photos; members receive temporary signed URLs. Clients cannot overwrite/delete objects.
 
-Before removing unused hosted uploads, check all database references and allow a grace period for interrupted saves. Never infer that an object is unused merely because an upload request timed out. A schema backup does not back up the image bytes.
+Manage FAQs under Settings → Approved knowledge. Approval prepares entries for future retrieval; it does not activate AI replies.
 
-## Approved knowledge and AI replies
+## Android
 
-Open **Settings → Approved knowledge** to maintain FAQs and policies for live Messenger. Existing entries and version history are preserved. Migration `20260922183054_knowledge_command.sql` provides the owner-only knowledge command.
+The preview profile in eas.json produces an internal APK. Inspect EAS CLI help and account/project ownership before starting a cloud build. Renaming the app/deep-link scheme requires a new native build to validate.
 
-Set `GEMINI_API_KEY` in backend Edge Function secrets. The optional `GEMINI_MODEL` override defaults to `gemini-2.5-flash`; verify account availability before evaluation. Configure and deploy the Messenger functions using the next guide. No provider credentials belong in the mobile app.
+Test account recovery, back navigation, keyboards/safe areas, private photos and poor connectivity on a lower-memory physical Android phone. Browser checks are supplemental.
 
-## Zapier Messenger setup
-
-Follow [Messenger setup](MESSENGER.md) for the implemented endpoints, exact Zap payloads, connection secrets, recovery schedule, and disabled-by-default verification flow. The steps below remain useful for account preparation; Page publishing is still planned.
-
-No Zapier workflow is implemented by these setup instructions. Follow the [integration plan and capability checks](ROADMAP.md#zapier-integration-plan--2026-09-23) before enabling live controls.
-
-1. Record the team's Zapier account owner, recovery contact, plan/task budget, and workflow maintainer. Use a test Page and consenting test recipients for validation.
-2. Connect the intended Facebook Page through Zapier's Facebook Messenger and, if Page publishing is confirmed, Facebook Pages connections. Record the business/Page association and required access; do not add a custom Meta app/token setup as a prerequisite for this planned route.
-3. Verify available incoming-message triggers, sending actions, publication/media actions, and result fields in that account. Document unsupported capabilities and keep those controls unavailable.
-4. Configure the authenticated Messenger intake, send authorization, and result reporting described in the setup guide before enabling automation. Keep workflow secrets and credential-bearing webhook URLs server-side; redact them from documentation, screenshots, and logs.
-5. Complete the [live automation acceptance checks](VALIDATION.md#zapier-live-automation-acceptance-planned), including retries, takeover, edited approvals, connection loss, and quota exhaustion. Record workflow versions and pause/recovery procedures.
-
-Facebook Page insights setup remains undecided and is not a prerequisite for testing messaging or publishing. Agree its source and research coverage separately in Roadmap.
-
-## Android builds
-
-```powershell
-npx eas-cli login
-npx eas-cli build --platform android --profile preview
-```
-
-The `preview` profile in `eas.json` produces an installable APK; `production` is for store output. EAS cloud builds require an Expo account. Test the actual development/release build on the target Android devices before acceptance.
-
-## Maintenance references
-
-Check current official documentation before changing APIs, versions, permissions, models, or pricing:
-
-- [Supabase CLI](https://supabase.com/docs/reference/cli/introduction), [migrations](https://supabase.com/docs/guides/deployment/database-migrations), [Auth for React Native](https://supabase.com/docs/guides/auth/quickstarts/react-native).
-- [Storage security](https://supabase.com/docs/guides/storage/security/access-control), [RLS](https://supabase.com/docs/guides/database/postgres/row-level-security), [Edge Functions](https://supabase.com/docs/guides/functions).
-- [Expo development builds](https://docs.expo.dev/develop/development-builds/introduction/), [Router](https://docs.expo.dev/router/introduction/), [SDK upgrades](https://docs.expo.dev/workflow/upgrading-expo-sdk-walkthrough/).
-- [Gemini structured output](https://ai.google.dev/gemini-api/docs/structured-output).
+[Supabase migrations](https://supabase.com/docs/guides/deployment/database-migrations), [RLS](https://supabase.com/docs/guides/database/postgres/row-level-security), [Storage security](https://supabase.com/docs/guides/storage/security/access-control), [Expo development builds](https://docs.expo.dev/develop/development-builds/introduction/).

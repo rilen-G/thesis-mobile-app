@@ -1,111 +1,42 @@
-# Messenger and Zapier setup
+# Direct Meta Messenger implementation brief
 
-The app implements live Messenger intake, grounded replies, coded order confirmation, owner takeover/manual replies, and status messages, and transactional follow-ups (off by default). It does not implement promotional publishing. Approved knowledge is managed in Settings. Deployment and real Page acceptance are separate from local test results.
+## Status
 
-The fixed connection-test reply confirms transport only. The thesis-required Supabase RAG retrieval path is [still to be implemented](RAG.md); the current grounded reply path supplies a bounded approved-knowledge set to Gemini.
+**Deferred as of 2026-10-04.** No deployable webhook, worker, sender, conversation schema or follow-up schedule is included. The owner screen is an unavailable state. Hosted services are not affected by source deletion; see [Setup](SETUP.md).
 
-## 1. Collect actual Page evidence
+## Standard Access research setup
 
-In Zapier, test **Facebook Messenger → New Message Sent to Page** with a team account. Record the original Page ID, sender's Page-scoped ID (PSID), stable Facebook message ID, original message timestamp, text, and any echo/attachment fields. Use the actual event fields shown in your account; labels may vary. Do not substitute the Zap execution ID, display name, or current time. Verify **Send Message From Page** can send back to that PSID.
+Use the BuckStar Page and researchers' accounts as customers. Capture only new research chats after cutover; historical import is excluded.
 
-If an incoming trigger, stable event ID, or reliable sender/page identification is unavailable, do not enable the live integration. Connection authorization alone is not sufficient. The connected Facebook Pages app is reserved for a later publishing release.
+Start with accepted tester invitations on the Meta developer app. Developer-app roles, Page permissions and mobile-app membership are separate. Only integration maintainers need administrative access; customer participants do not need mobile-app owner/staff permissions.
 
-## 2. Provision a disabled connection
+Prove actual incoming messages and replies, then record the working Graph API version, permissions and token ownership. Meta developer documentation was rate-limited during planning; tester eligibility must be verified in the live configuration. Standard Access is not a promise of public-customer access.
 
-Apply the Messenger migration after the existing baseline, using the project's normal linked migration workflow. Never replay the consolidated baseline on an existing database. Deploy `messenger-ingest`, `messenger-dispatch`, and `messenger-worker`; their `verify_jwt=false` configuration is intentional because each validates a dedicated secret internally.
+The official [Messenger collection](https://www.postman.com/meta/messenger-platform-api/collection/iyp204x/messenger-platform-api) and [Send API](https://www.postman.com/meta/messenger-platform-api/folder/vilwbh4/send-api) document Page tokens, pages_messaging and the response window. Verify Page subscription permissions during setup.
 
-As a database administrator, insert one connection (replace example values, do not use these literally):
+## Planned boundary
 
-```sql
-insert into public.messenger_connections
- (business_id,page_id,page_name,probe_sender_id)
-values ('<business UUID>','<numeric Page ID>','<Page name>','<tester PSID>')
-returning id;
-```
+Researcher → signed Meta webhook → durable Supabase intake → worker → rules/business RAG/Gemini → Meta Send API.
 
-The connection starts disabled and unverified. Only the configured tester can receive a fixed connection-test reply in this state. Other incoming messages are retained for owner review. They are not replayed when automation is enabled. The tester PSID is scoped to this Page, not a public Facebook account ID.
+Implement the verification challenge and raw-body signature validation. Resolve business identity from the registered Page. Persist original IDs/timestamps before acknowledging; handle batches, duplicate/older events, quick replies, attachments and echoes.
 
-Create Zap B's Catch Hook to obtain its URL. Configure these **Edge Function secrets**, never `EXPO_PUBLIC_*`:
+Credentials stay server-side. Preserve owner takeover, manual replies, order confirmation and status notices. Unmatched human Page replies pause automation; matched bot echoes never cause loops.
 
-| Secret | Value |
-|---|---|
-| `MESSENGER_CONNECTIONS` | JSON array: `[{"id":"<connection UUID>","secret":"<random 32+ character secret>","hook_url":"https://hooks.zapier.com/hooks/catch/.../.../"}]` |
-| `MESSENGER_WORKER_SECRET` | A separate random 32+ character secret used only by the recovery schedule |
-| `GEMINI_API_KEY`, `GEMINI_MODEL` | Existing AI provider configuration; the model defaults to `gemini-2.5-flash` |
+Recheck source versions, conversation revision, takeover, order state and send eligibility immediately before sending. Distinguish queued, provider-accepted, delivered/read where evidenced, failed, suppressed and unknown. Never blindly replay an ambiguous send.
 
-Use different random secrets for each Page connection. The Supabase service-role credential remains inside Edge Functions; do not give it to Zapier. The server resolves business identity from the authenticated connection. For key rotation, pause the integration, update the Edge secret and both Zaps, and repeat the probe with a newly configured verification state before re-enabling.
+Customer confirmation creates an unreserved Confirmed order. Staff acceptance checks and allocates stock.
 
-## 3. Zap A: incoming messages
+## Follow-up policy
 
-1. Trigger: **Facebook Messenger → New Message Sent to Page**, selecting the connected Page.
-2. Action: **Webhooks by Zapier → POST** to `https://<project>.supabase.co/functions/v1/messenger-ingest`, JSON payload.
+- Only unfinished inquiries/orders needing a customer response qualify; a resolved FAQ answer alone does not.
+- First reminder: 30 minutes after the eligible customer message.
+- Second: 2 hours after Meta accepts the first reminder.
+- Hard cap: two automated follow-ups per conversation; no automatic counter reset.
+- Stop on reply, opt-out, takeover, resolved inquiry, confirmed order, disabled automation or expired eligibility.
+- Both sends must remain inside the standard 24-hour response window. Outgoing messages do not reopen it.
+- Deterministic rules and approved templates control timing/content. Queueing is not sending; acceptance drives counts and second-reminder timing.
+- Durable jobs, leases and recovery work while the mobile app is closed.
 
-Set headers `x-messenger-connection` to the connection UUID and `x-messenger-secret` to its secret. Map:
+## Acceptance
 
-```json
-{
-  "page_id": "<original Page ID as text>",
-  "sender_id": "<original sender PSID as text>",
-  "event_id": "<original stable Facebook message ID>",
-  "timestamp": "<original ISO timestamp with timezone>",
-  "text": "<message text>",
-  "is_echo": false,
-  "unsupported": false
-}
-```
-
-`timestamp` also accepts a JSON number containing Unix milliseconds. IDs must remain strings to avoid numeric precision loss. Booleans must be JSON booleans, not the strings `"false"`/`"true"`. Map echo and unsupported attachment indicators from the real event. If Zapier cannot supply a field, confirm the event semantics before using a constant. Empty/missing text is retained as unsupported and flagged for owner handling. Do not forward full customer profiles, files, or unrelated event fields.
-
-Success means the event is stored, not that a reply was sent. It is safe to retry intake using the same event ID. The service excludes Page echoes, deduplicates events, suppresses stale processing, and preserves unsupported messages as owner-review placeholders.
-
-## 4. Zap B: outgoing messages
-
-Use the same Page and the same connection headers for every webhook action:
-
-1. **Webhooks → Catch Hook**. Receive `connection_id`, `job_id`, and `attempt_id`; no customer message text is included at this step.
-2. **Webhooks → POST** to `/functions/v1/messenger-dispatch`: `{"op":"authorize","attempt_id":"<Catch Hook attempt_id>"}`.
-3. **Filter**: continue only when the authorization response's `allowed` is boolean `true`.
-4. **Facebook Messenger → Send Message From Page**. Select the configured Page. Map `Recipient_id` from authorization `recipient_id`, and `Text` from authorization `text`.
-5. **Webhooks → POST** to `/functions/v1/messenger-dispatch`: `{"op":"result","attempt_id":"<Catch Hook attempt_id>","outcome":"accepted","provider_id":"<Facebook result message ID if supplied>","run_reference":"<Zap run reference if supplied>"}`. Omit identifiers the action does not supply.
-
-Place the send immediately after authorization without a delay step. Disable Zap autoreplay for this workflow. Never manually replay step 4 by itself: Facebook may have accepted the first attempt. A successful callback means provider acceptance, not confirmed delivery or reading. A failed send that prevents the final step is detected by the recovery worker after five minutes and shown as an unknown outcome.
-
-Authorization is single-use. Repeated or expired authorizations return `allowed:false`; retries must pass through that boundary. A timeout after authorization must be reconciled against Zap history and the actual Messenger conversation. The app's **Confirmed sent / Confirmed not sent** controls require an evidence note and never resend automatically. If confirmed not sent, the owner can take over and send a fresh manual reply. Pause cannot recall a send already authorized by Zapier.
-
-## 5. Recovery schedule and verification
-
-In Supabase Vault, create `messenger_project_url` and `messenger_worker_secret` (the latter must match `MESSENGER_WORKER_SECRET`). Execute `scripts/messenger-schedule.sql` once. It creates the extensions if needed and upserts the named one-minute schedule. The scheduled job calls only the protected worker endpoint. Incoming events also wake the worker immediately; order-status and manual replies are picked up within the next recovery tick.
-
-Open **Dashboard → Messenger inbox** (also linked from Settings). Send a new message from the configured tester. Check Zap A, Zap B, and receipt of the fixed test reply in Messenger. Click **I received the test reply**. The backend requires a recorded successful probe first. The connection remains paused until the owner clicks **Enable Messenger automation**.
-
-Exercise menu inquiries, a pickup order, the Confirm / Change order chips (or a short yes such as "oo po"), and staff acceptance/ready/received. Summaries expire at the business cutoff on the same day (at most 24 hours); a confirmation also requires the pickup time to be in the future. Corrections invalidate old summaries. A confirmed order reserves its quantity immediately; staff acceptance keeps that reservation, and rejecting or expiring it before acceptance restores it. After confirmation, further concerns are flagged for the owner rather than modifying the order automatically.
-
-## ManyChat alternative
-
-A Page uses either Zapier or ManyChat (Pro plan), never both. Sections 2 and 5 apply unchanged, except that `probe_sender_id` is the tester's ManyChat contact ID, not a PSID. Zaps A and B are not used.
-
-In `MESSENGER_CONNECTIONS`, a ManyChat entry replaces `hook_url` with `"transport":"manychat"` and the Page's ManyChat API key: `{"id":"<connection UUID>","secret":"<random 32+ character secret>","transport":"manychat","api_key":"<ManyChat API key>"}`.
-
-Incoming: in ManyChat, add a **Default Reply** (every time) whose flow contains only an **External Request** action: POST to `https://<project>.supabase.co/functions/v1/messenger-ingest` with headers `Content-Type: application/json`, `x-messenger-connection`, and `x-messenger-secret`, and body **Full Contact Data**. Do not use a custom body: ManyChat does not escape inserted text containing quotes or line breaks. `messenger-ingest` keeps only `page_id`, `id` (sender), and `last_input_text`, and discards all other contact fields. ManyChat supplies no message ID, so the event ID is a hash of contact ID, `last_interaction`, and text; the server receive time is used for ordering. A message that is only a URL (a photo or attachment) is stored as an unsupported placeholder for owner review; the URL is not kept.
-
-Outgoing: the worker authorizes each attempt, sends it through ManyChat `POST /fb/sending/sendContent` without a message tag, and records `accepted` only when ManyChat returns `status: success`. Any other result is unknown and requires owner reconciliation. `messenger-dispatch` rejects ManyChat connections.
-
-## Follow-ups
-
-Off by default; the owner turns them on per business in the Messenger screen. When the bot answers an inquiry, asks for a missing order detail, or sends a summary and the customer goes quiet, Follow-Up 1 is sent 30 minutes after the customer's message and Follow-Up 2 two hours later, at most two per case, only inside the 24-hour window and business hours. A customer reply, confirmation, opt-out ("stop", "wag na po"), takeover, pause, unavailable item, expired summary, or closed window stops the sequence. Closing messages ("salamat po", "thanks") get no reply. Each case is recorded in messenger_followups for the KPI tab.
-
-## Order timeout
-
-Off by default; the owner turns it on in the Messenger screen. A confirmed Messenger order that staff have not accepted or rejected shows a "Waiting N min" badge after 15 minutes. At the earliest of 30 minutes after confirmation (or after opening, if confirmed before opening), the pickup time, or the cutoff, an order that is still Confirmed becomes "Expired – Not Accepted", its reserved stock is restored, and the customer gets one message: a Yes/No offer to continue, a closing message if the order already came from a "Yes", or an apology if it is within 30 minutes of closing. "Yes" (tapped or typed) starts a new summary with the same items; "No" or no reply ends it. A new summary from "Yes" gets no follow-ups. Staff cannot revive an expired order. This is the only automatic order closure.
-
-## Operating and acceptance limits
-
-- Owners alone see conversations and control takeover. Staff retain operational order access. No read receipts or push notifications are implemented.
-- The inbox polls while visible and supports loading additional history. Manual replies require takeover and an open 24-hour window. Resuming considers only the latest unanswered supported customer message.
-- Uncertain sends block subsequent sends in the same conversation until reconciled. Failed AI processing can be retried explicitly. Unacknowledged hook offers stop after five attempts; the owner may retry the handoff only if no attempt was authorized to send. Workers use leases and stale completions cannot save replies.
-- Up to 120 distinct incoming messages are claimed per business/hour. A worker handles bounded batches. This is a small-pilot implementation; task usage includes each webhook and Facebook action. Measure actual Zap task usage before the pilot.
-- Jobs persist in Postgres; provider-call retries can incur another Gemini charge. Do not assume exactly-once external delivery: a Zap send cannot be transactionally coupled to the database. Lost callback outcomes require reconciliation.
-- Pause automation before connection repair. Inspect `worker_seen_at`, the named Cron job, Zap history, and message outcome indicators. No API currently claims knowledge of Zapier billing/quota/disconnection reasons unless the execution evidence supplies it.
-- Do not claim hosted/device acceptance until Page tests, background recovery, and a physical Android check have passed. Set study-specific retention and participant approval before collecting research data.
-
-Run `npm test`, `npm run typecheck`, `npm run lint`, and `npm run test:postgres`. For the live suite alone on real Postgres, use `npm run test:messenger:postgres`. No test sends Facebook messages.
+Verify signature rejection, duplicate/batched/older events, research participant scope, confirmation, allocation, takeover races, token failures and unknown outcomes. Test reminders with a fixed clock, then actual researcher conversations. Local tests are not delivery evidence.

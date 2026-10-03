@@ -39,7 +39,7 @@ export default function SignInScreen() {
     <View style={styles.heading}><Text style={styles.eyebrow}>Partner Business</Text><Text style={styles.title}>{title}</Text></View>
     <Card style={styles.card}>
       {!backendConfigured ? <View style={styles.notice}><Copy>Backend setup required. Configure the Supabase URL and publishable key, then restart the app.</Copy></View> : null}
-      <AuthField icon={<Mail color={colors.terracotta} size={18} />} label="Email" autoCapitalize="none" autoComplete="email" inputMode="email" value={email} onChangeText={setEmail} placeholder="owner@qfacio.test" />
+      <AuthField icon={<Mail color={colors.terracotta} size={18} />} label="Email" autoCapitalize="none" autoComplete="email" inputMode="email" value={email} onChangeText={setEmail} placeholder="owner@example.com" />
       {mode !== 'reset' ? <AuthField icon={<LockKeyhole color={colors.terracotta} size={18} />} label="Password" autoCapitalize="none" secureTextEntry value={password} onChangeText={setPassword} placeholder="Enter your password" /> : null}
       {mode === 'signup' ? <AuthField icon={<LockKeyhole color={colors.terracotta} size={18} />} label="Confirm password" secureTextEntry value={confirm} onChangeText={setConfirm} placeholder="Repeat your password" /> : null}
       <ErrorNotice message={error ?? auth.error} />{notice ? <Copy>{notice}</Copy> : null}

@@ -1,81 +1,63 @@
 # Architecture and business rules
 
-## Code and data ownership
+## Current implementation
 
-The Expo app is the interface. Supabase Auth supplies identity, Postgres owns business state, Storage holds media, and Edge Functions call external providers. Gemini has no direct database authority.
+Expo is the interface. Supabase Auth supplies identity, Postgres owns business state, and private Storage holds product photos. No deployable AI or Messenger endpoint is included.
 
 | Location | Responsibility |
 |---|---|
-| `src/app/` | Expo Router routes and shared access boundaries |
-| `src/components/`, `src/theme/` | Reusable native UI and design tokens |
-| `src/features/operations/` | Business snapshots, writes, recovery journal, menu and order screens |
-| `src/features/knowledge/` | Owner-approved FAQ/policy editor and versioned saves |
-| `src/lib/` | Shared client infrastructure |
-| `supabase/migrations/` | Reproducible database schema and permissions |
-| `supabase/functions/_shared/` | Shared Messenger authentication and grounded reply formatting |
-| `tests/`, `scripts/` | Regression fixtures and deliberate validation/evaluation tools |
+| src/app | Expo Router routes and access boundaries |
+| src/components and src/theme | Native UI and design tokens |
+| src/features/operations | Snapshots, commands, recovery, menu, customers, orders and settings |
+| src/features/knowledge | Owner-approved FAQ/policy editing and versioned saves |
+| src/features/messenger | Unavailable-state screen |
+| supabase/migrations | Fresh-install business schema and knowledge command |
+| supabase/functions/_shared/grounding.ts | Pure validation/formatting foundation, exercised locally |
+| tests and scripts | Regression and explicit verification tools |
 
-The sibling `mockup/` is the visual reference: cream surfaces, Hanken Grotesk typography, terracotta actions, compact cards/status badges, and horizontal filters. Preserve the hierarchy while using native navigation and controls. Reuse types, domain rules, and tokens; rewrite DOM, browser storage, file inputs, CSS, and mouse-only interactions for native use. Check actual dependency versions in `package.json`.
+Preserve existing cream surfaces, Hanken Grotesk, terracotta actions, cards and native navigation. Keep screens thin. Forms retain inputs on failure; data screens expose loading, empty, error, retry, offline and permission states. Unsupported features never display fabricated results.
 
-Keep screens thin and domain logic in feature modules. Forms preserve input on failure; server state is reloaded from the backend. Loading, empty, error, retry, offline, and permission states are required. Unsupported features show unavailable states without fake operational values. Check Android back behavior, keyboards, safe areas, accessibility labels, contrast, text scaling, and low-memory image handling.
+## Authorization and recovery
 
-## Security and writes
+One account has one business membership. Owners manage menu, allocations, settings, staff, knowledge and reports. Staff handle orders and necessary customer information. Use membership records, never editable user metadata.
 
-One account has one business membership. Owners manage menu, quantities, settings, membership, knowledge and owner reports. Staff handle orders and necessary customer information. Authorization uses membership records, never user-editable Auth metadata.
+Exposed business tables use RLS. Composite relationships prevent cross-business references. Public RPC wrappers invoke restricted private helpers with an empty search path; clients cannot mutate tables directly.
 
-All exposed business tables use RLS. Composite relationships prevent cross-business references. `public.app_command` and other public wrappers invoke restricted helpers in `private`; clients cannot bypass the command service with direct table mutations. Helpers set an empty search path and validate identities, payloads, versions, and permitted operations.
+Commands use stable request IDs and optimistic record versions. Same-request retries return the saved result; changed payloads under that ID fail. Per-business locks and short transactions serialize allocations.
 
-Each write has a stable request ID. Repeating the same ID/payload returns its recorded result; changing the payload under that ID fails. Optimistic record versions reject stale edits. Short transactions and per-business locks serialize allocation changes; external provider calls occur outside these locks.
+Journals are scoped by backend URL and account. Unknown saves require explicit retry; reconnecting never automatically resubmits them. The new namespace does not replay earlier journals into a replacement backend. Reconcile old saves in the original environment before cutover.
 
-An account-scoped local journal retains uncertain writes. After a lost acknowledgement, the user explicitly retries the same request; the app does not automatically submit on login/reconnect or accept conflicting writes while reconciliation is pending. A definitive response clears the journal. Agree retention for private request records and journals before the pilot; do not discard keys while clients may still retry them.
+Only the Supabase URL and public client key belong in EXPO_PUBLIC variables. Future Gemini, Meta and Apify calls and secrets stay on the backend. Do not log full conversations or tokens.
 
-Only public client configuration goes in `EXPO_PUBLIC_*`. Keep Gemini, automation/webhook, signing, service-role, and database credentials server-side; Facebook connection credentials belong in the authorized provider connection, never the mobile bundle. Avoid logging tokens, unnecessary customer information, or complete conversations. Membership removal takes effect on database access; session revocation behavior still requires hosted Auth testing.
+## Menu and photos
 
-Live Messenger intake, grounded replies, coded confirmation, owner inbox/takeover, and status messages are implemented behind a disabled-by-default Zapier connection. Hosted configuration and actual Page acceptance are still required; see [Messenger setup](MESSENGER.md). Page publishing and follow-ups remain planned. The [Roadmap integration plan](ROADMAP.md#zapier-integration-plan--2026-09-23) records the transport boundary and unresolved insights source.
+Products store name, description, integer-centavo price, active state, version, optional category and private photo_path. Categories allow 1–40 characters, exclude control characters and All/Uncategorized, and reuse spelling for case-insensitive matches within a business.
 
-## Live Messenger transport
+Owners upload actual food photography. Current menu uploads are resized/compressed and stored at immutable paths. Future high-resolution original retention belongs to the content milestone. No generated demonstration menu photos are bundled or seeded.
 
-`messenger-ingest` authenticates a Page-specific connection secret, excludes echoes, and persists original event IDs before waking `messenger-worker`. The worker claims messages with expiring leases, uses shared grounding with live wording, and persists outbound jobs. Supabase Cron supplies one-minute recovery independently of the mobile app.
-
-The outbound Zap must obtain single-use authorization from `messenger-dispatch` immediately before sending. It checks conversation revision, takeover, the 24-hour window, current sources, and current order status. Offered webhook jobs may be retried; authorized sends cannot. Provider callbacks record acceptance, not confirmed delivery. Unknown results block following sends until an owner reconciles them with evidence. A pause cannot retract a send already authorized.
-
-Summaries carry Confirm / Change order quick replies on ManyChat; a tap, an exact short yes (oo, opo, yes, sige, confirm, ok po), or an internal `CONFIRM <8-character code>` confirms a current, provider-accepted summary with a 30-minute/pickup expiry. Unclear replies re-ask; any other message invalidates the summary. The database rechecks sources, rules, and availability, creates one operational order, and retains the summary as evidence. Quantity is deducted only by the existing staff-acceptance transaction. Order transitions enqueue notices transactionally. The owner-only `messenger_command` follows membership, version, audit, and idempotent request-journal rules. Staff continue seeing orders without live-chat access.
-
-## Menu and daily quantities
-
-Products store name, description, integer-centavo price, active state, private `photo_path`, version, and optional category. Category names are business-defined: trim whitespace, require 1–40 characters, reject control characters and All/Uncategorized, and reuse existing spelling for case-insensitive matches within that business. Omitted category preserves the saved value; explicit NULL clears it. Server-generated product IDs retain their category and remain idempotent.
-
-Menu filters and editor suggestions come from saved products. Search and category selection apply together; empty categories disappear and a removed selection falls back to All. Category edits do not change historical order item names, prices, totals, or quantities.
-
-Daily allocation means sellable quantity, not a separate promotion cap. Each product/business date stores `total` and `used`; remaining is `total - used`. Dates use `Asia/Manila`. The owner initializes each day's quantity with an audited reason; an uninitialized day has no availability. Historical dates stay intact and total cannot fall below used quantity.
+Daily allocation is sellable quantity: remaining = total - used. Dates use Asia/Manila. Owners initialize each day with an audited reason; uninitialized days have no availability. Historical records remain intact and total cannot fall below used.
 
 ## Orders
 
-The supported transitions are:
-
-```text
+~~~text
 Confirmed -> Accepted -> Ready -> Completed
 Confirmed -> Rejected
 Confirmed -> Expired
 Accepted  -> Rejected
-```
+~~~
 
-Confirmed means customer-confirmed and awaiting staff acceptance. A Messenger `CONFIRM` reserves all items atomically and marks the order `reserved`; rejecting or expiring a reserved Confirmed order restores them. Manual orders reserve nothing until acceptance. Acceptance checks current business hours, approved rules, same-day future pickup, active items, and availability, then reserves all items atomically unless the order is already reserved. A failed item rolls back the entire acceptance; competing last-item requests cannot both succeed.
+Confirmed orders reserve nothing. Acceptance checks approved rules, opening/cutoff times, same-day future pickup, active products and availability, then reserves every item atomically. A failed item rolls back the whole operation; competing requests cannot both take the final portion.
 
-Rejecting a Confirmed order restores nothing. Rejecting an Accepted order restores quantity exactly once only when its policy, captured at acceptance, permits restoration. Later settings changes do not rewrite that policy. Ready becomes Completed after collection/handoff; an unclaimed order stays Ready, does not restore quantity, and is excluded from completed sales. There are no separate Draft, Preparing, Cancelled, or Unclaimed order statuses.
+Rejecting/expiring a Confirmed order restores nothing. Rejecting an Accepted order restores quantity exactly once only when its acceptance-time policy permits. An unclaimed Ready order stays Ready and does not restore allocation. Only Completed orders count as completed sales.
 
-Orders retain item-name and integer-centavo price snapshots. Backend totals do not change when the menu changes. Confirmed pickup/payment/request details can be edited before acceptance. Item corrections after acceptance require rejection and a new order where the lifecycle permits it. Record payment method as information; neither the app nor AI verifies payment. Fulfillment is same-day pickup within the owner's opening/cutoff times; overnight and future-day schedules are outside the current release.
+Item names and prices are snapshots. Pickup/payment/request details may be edited while Confirmed. Rejection reasons are saved and audited; the current app does not send them to Messenger. Payment method is information, not verification. Expiration is supported by the command layer; no automatic expiration worker exists in this baseline.
 
-## Approved knowledge and grounded AI
+## Knowledge and deferred services
 
-The owner maintains FAQs through Settings and the owner-only `knowledge_command` RPC. Updates check optimistic versions and keep immutable knowledge history; retries return their saved result.
+Owner knowledge saves use knowledge_command, immutable version history, membership checks and idempotent requests. The grounding helper validates supplied IDs, approved excerpts, quantities and pickup details. It has no provider call, webhook, worker or app entrypoint and does not constitute RAG or a chatbot.
 
-Messenger processing uses shared grounding under `supabase/functions/_shared/grounding.ts`. Replies use database values and exact approved excerpts, not free-form provider reply text. Product IDs, source versions, quantities, pickup times, and payment details are validated. Unsupported requests escalate to the owner. The application, not the model, checks customer confirmation codes.
+[Messenger](MESSENGER.md), [RAG](RAG.md) and [Content](CONTENT.md) define later work. Current operational totals use app records; external reach, attribution and follow-up metrics remain unavailable.
 
-This implemented grounding loads a bounded set of approved knowledge into Gemini context; it does not perform query-specific semantic retrieval or vector search. The thesis RAG requirement remains open. See the [Supabase RAG implementation brief](RAG.md) before describing this feature as complete RAG.
+Snapshots load business records and the latest 100 audit events; knowledge editing reads at most 1,000 entries. Add pagination before larger pilots. Clean unused uploads only after checking references and pending-save grace periods.
 
-## Operational limits and retention
-
-The current operational snapshot loads business records together and displays the latest 100 audit events. Knowledge management currently caps entries at 1,000 rows; Gemini context uses up to 30 messages, 100 active products, and 40 approved knowledge items. Catalog replies list at most 20 products. Provider attempts are capped at 120 recorded attempts per business/hour. Add pagination/search before expanding beyond the small pilot dataset.
-
-Photo replacement can leave unreferenced uploads. Clean them through an administrator process that checks references and pending-save grace periods. Define retention/access/export/deletion rules for conversations, knowledge history, request journals, uploads, and evaluation traces before participant collection. Research exports should use minimal data and pseudonymous IDs. See [Validation](VALIDATION.md) for current acceptance limits and [Roadmap](ROADMAP.md) for future integrations.
+Agree consent, retention/deletion and pseudonymized export policies before participant collection. Source cleanup does not alter hosted services; see [Setup](SETUP.md).

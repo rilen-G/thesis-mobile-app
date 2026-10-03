@@ -1,16 +1,17 @@
 # Project guide
 
-Read only the guide needed for your task:
+Read only the guide needed:
 
 | Guide | Covers |
 |---|---|
-| [Setup](SETUP.md) | Run the app, provision a database, configure accounts and Gemini, build Android |
-| [Architecture](ARCHITECTURE.md) | Code layout, security, data ownership, order rules, grounded Messenger replies |
-| [Roadmap](ROADMAP.md) | What works, what remains, feature acceptance gates, unresolved decisions |
-| [Validation](VALIDATION.md) | Tests, historical evidence, device checklist, research measures |
-| [Messenger setup](MESSENGER.md) | Zapier field mappings, disabled connection provisioning, worker schedule, verification and recovery |
-| [Supabase RAG](RAG.md) | Current grounding limits, required retrieval work, and acceptance evidence for thesis RAG |
+| [Setup](SETUP.md) | App, fresh database baseline, accounts, photos, Android builds, hosted cutover |
+| [Architecture](ARCHITECTURE.md) | Implemented modules, permissions, order rules and recovery |
+| [Roadmap](ROADMAP.md) | Decisions made on 2026-10-04, current status and later milestones |
+| [Validation](VALIDATION.md) | Engineering checks, device/hosted acceptance and research limits |
+| [Messenger](MESSENGER.md) | Deferred direct Meta integration, tester access and follow-up policy |
+| [RAG](RAG.md) | Deferred Supabase retrieval, source isolation and evaluation |
+| [Content and curation](CONTENT.md) | Deferred Apify imports, photo fidelity, generated designs and export |
 
-Start with Setup to run the application, or Roadmap to understand the project. Architecture describes implemented behavior; Roadmap marks future work explicitly. Validation distinguishes engineering checks from research approval.
+Working name: **Thesis Foodservice App**. Research business: **BuckStar**. Researcher-only testing is the development phase.
 
-These guides replace the previous numbered documents. Keep each fact in its owning guide and link to it elsewhere. Update the relevant guide when behavior or a decision changes; record evidence with dates instead of presenting an old test result as current acceptance.
+Architecture describes current behavior. Integration/content guides are implementation briefs, not deployed-feature claims. Keep unresolved external approvals, capabilities and research decisions visible. Update each fact in its owning guide and this index when documents change.

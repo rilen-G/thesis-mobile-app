@@ -2,8 +2,8 @@ import type { Command } from './domain';
 export type PendingOperation = { payload: Command; requestId: string };
 export type JournalStorage = { getItem: (key: string) => Promise<string | null>; setItem: (key: string, value: string) => Promise<void>; removeItem: (key: string) => Promise<void> };
 /** A recovery journal, not an offline send queue. Retrying always requires a user action. */
-export function pendingJournal(storage: JournalStorage, userId: string) {
-  const key = `operations.pending.${userId}`;
+export function pendingJournal(storage: JournalStorage, userId: string, backendId: string) {
+  const key = `operations.pending.v2.${encodeURIComponent(backendId)}.${encodeURIComponent(userId)}`;
   return {
     async read(): Promise<PendingOperation | null> { const value = await storage.getItem(key); return value ? JSON.parse(value) as PendingOperation : null; },
     async prepare(operation: PendingOperation): Promise<PendingOperation> {

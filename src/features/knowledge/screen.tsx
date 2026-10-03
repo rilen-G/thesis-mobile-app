@@ -39,7 +39,7 @@ function Workspace({ bid }: { bid: string }) {
  }
  const save = (payload: Command) => run(() => knowledgeCommand({ ...payload, business_id: bid }));
  return <>
-  <Copy>Approved FAQs and policies are used for live Messenger replies. Maintain opening hours in Settings. Withdraw approval to stop using an entry.</Copy>
+  <Copy>Save and approve FAQs and policies for the future Messenger assistant. AI replies and retrieval are not connected yet. Maintain opening hours in Settings.</Copy>
   <ErrorNotice message={error} />
   {busy || (!items && !error) ? <ActivityIndicator accessibilityLabel="Loading knowledge" /> : null}
   <AppButton label="Refresh knowledge" variant="secondary" disabled={busy} onPress={() => { void run(load); }} />

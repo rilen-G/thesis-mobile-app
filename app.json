@@ -1,10 +1,10 @@
 {
   "expo": {
-    "name": "Q&Facio Kitchen Operations",
-    "slug": "q-facio-kitchen-operations",
+    "name": "Thesis Foodservice App",
+    "slug": "thesis-foodservice-app",
     "version": "1.0.0",
     "orientation": "portrait",
-    "scheme": "qfacio",
+    "scheme": "thesisfoodservice",
     "userInterfaceStyle": "light",
     "android": {
       "predictiveBackGestureEnabled": false

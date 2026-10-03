@@ -129,6 +129,7 @@ await t.test('acceptance retries allocate once; competing requests cannot overse
 await t.test('rejection after acceptance restores once and requires a reason',async()=>{
  await assert.rejects(transition(first,'rejected',2,''),/reason/);
  const req=randomUUID();await transition(first,'rejected',2,'Cannot fulfill',req);await transition(first,'rejected',2,'Cannot fulfill',req);
+ assert.equal((await snap(owner)).orders.find(o=>o.id===first).rejection_reason,'Cannot fulfill');
  assert.equal((await snap(owner)).allocations[0].used,0);await assert.rejects(transition(first,'accepted',3),/invalid_transition/);
 });
 await t.test('prices are immutable and ready orders cannot be rejected',async()=>{

@@ -45,11 +45,11 @@ export function Dashboard() {
   const topProduct = data.products.find((product) => product.name === top);
   return <DataScreen title={data.business.name}>
     <View style={styles.greeting}><Text style={styles.sectionTitle}>Magandang araw!</Text><Text style={styles.supporting}>Here&apos;s your store&apos;s performance today.</Text></View>
-    {data.role === 'owner' ? <Card><Text style={styles.cardTitle}>Messenger inbox</Text><Text style={styles.smallCopy}>Review live conversations, handle customer concerns, and manage automation.</Text><AppButton label="Open Messenger inbox" onPress={() => router.push('/(owner)/messenger')} /></Card> : null}
-    <MetricCard fullWidth icon={Banknote} label="End-of-Day Online Sales" value={money(sales)} />
-    <View style={styles.twoColumns}><MetricCard icon={CheckCircle2} label="Completed Online Orders Today" value={String(completed.length)} /><MetricCard icon={AlertCircle} label="Orders Needing Action" value={String(action)} /></View>
+    {data.role === 'owner' ? <Card><Text style={styles.cardTitle}>Messenger inbox</Text><Text style={styles.smallCopy}>Direct Meta messaging and follow-ups are planned for a later phase.</Text><AppButton label="View Messenger plan" onPress={() => router.push('/(owner)/messenger')} /></Card> : null}
+    <MetricCard fullWidth icon={Banknote} label="Completed Order Sales Today" value={money(sales)} />
+    <View style={styles.twoColumns}><MetricCard icon={CheckCircle2} label="Completed Orders Today" value={String(completed.length)} /><MetricCard icon={AlertCircle} label="Orders Needing Action" value={String(action)} /></View>
     <View style={styles.twoColumns}><MetricCard icon={MessageSquareText} label="New Order-Related Conversations" value="—" /><MetricCard icon={Megaphone} label="Latest Promotional Post Reach" value="—" /></View>
-    <Card style={styles.topItem}><View style={styles.flexOne}><View style={styles.metricLabel}><UtensilsCrossed color={colors.terracotta} size={22} /><Label>Top Ordered Item</Label></View><Text numberOfLines={1} style={[styles.cardTitle, { marginTop: 8 }]}>{top}</Text><Text style={styles.smallCopy}>Based on completed online orders.</Text></View>{topProduct ? <View style={styles.topPhoto}><ProductPhoto path={topProduct.photo_path} height={58} /></View> : null}</Card>
+    <Card style={styles.topItem}><View style={styles.flexOne}><View style={styles.metricLabel}><UtensilsCrossed color={colors.terracotta} size={22} /><Label>Top Ordered Item</Label></View><Text numberOfLines={1} style={[styles.cardTitle, { marginTop: 8 }]}>{top}</Text><Text style={styles.smallCopy}>Based on completed orders recorded in the app.</Text></View>{topProduct ? <View style={styles.topPhoto}><ProductPhoto path={topProduct.photo_path} height={58} /></View> : null}</Card>
     {data.role === 'owner' ? <AppButton label="View Owner KPI Analytics" variant="ghost" onPress={() => router.push('/(owner)/metrics')} /> : null}
   </DataScreen>;
 }
@@ -89,7 +89,7 @@ function OrderCard({ order, now }: { order: OrderRecord; now: number }) {
   const { data } = useOperations();
   const mutation = useMutation();
   const [rejecting, setRejecting] = useState(false);
-  const waiting = order.status === 'confirmed' && order.reserved && data ? waitingMinutes(order, data.business.opening_time, now) : 0;
+  const waiting = order.status === 'confirmed' && data ? waitingMinutes(order, data.business.opening_time, now) : 0;
   const customer = data?.customers.find((item) => item.id === order.customer_id);
   const items = data?.items.filter((item) => item.order_id === order.id) ?? [];
   const transition = order.status === 'confirmed' ? 'accepted' : order.status === 'accepted' ? 'ready' : order.status === 'ready' ? 'completed' : null;
@@ -204,7 +204,7 @@ export function Promotions() {
     <Card style={styles.emptyPromos}>
       <View style={styles.emptyPromoIcon}><Megaphone color={colors.terracotta} size={24} /></View>
       <Text style={styles.cardTitle}>No promotions yet</Text>
-      <Text style={[styles.body, styles.emptyPromoCopy]}>Promotion tools are still being developed. Nothing has been created for this business.</Text>
+      <Text style={[styles.body, styles.emptyPromoCopy]}>Caption generation and editable graphics are planned. You will copy captions and export images for manual Facebook posting.</Text>
     </Card>
   </DataScreen>;
 }
@@ -215,9 +215,9 @@ export function Metrics() {
     ['New Order-Related Conversations', '—', 'Distinct new Messenger threads about ordering.'],
     ['Chat-to-Sale Conversion Rate', '—', 'Completed chat orders divided by order-related conversations.'],
     ['Promotion-to-Chat Conversion Rate', '—', 'Tracked referral conversations divided by post reach.'],
-    ['Follow-Up Response Rate', '—', 'Eligible stalled chats completed after one app follow-up.'],
+    ['Follow-Up Response Rate', '—', 'Eligible stalled chats with a customer reply after an accepted follow-up; maximum two reminders.'],
   ];
-  return <DataScreen title="KPI Analytics" detail ownerOnly><Card style={{ backgroundColor: '#FFFAF4' }}><View style={styles.metricLabel}><TrendingUp color={colors.terracotta} size={22} /><Text style={styles.cardTitle}>KPI Analytics</Text></View><Text style={styles.smallCopy}>Values remain unavailable until the research integrations are connected. No sample result is presented as real data.</Text></Card><View style={styles.twoColumns}>{metrics.slice(0, 4).map(([label, value, note]) => <Card key={label} style={styles.analyticsCard}><Label>{label}</Label><Text style={styles.analyticsValue}>{value}</Text><Text style={styles.summaryLabel}>{note}</Text></Card>)}</View><Card><Label>Follow-Up Response Rate</Label><Text style={styles.analyticsValue}>{metrics[4][1]}</Text><Text style={styles.smallCopy}>{metrics[4][2]}</Text></Card><Card><View style={styles.metricLabel}><UtensilsCrossed color={colors.terracotta} size={22} /><Text style={styles.cardTitle}>Menu-Item Order Performance</Text></View><Text style={styles.smallCopy}>Completed order quantity and online sales become available from saved order records.</Text></Card></DataScreen>;
+  return <DataScreen title="KPI Analytics" detail ownerOnly><Card style={{ backgroundColor: '#FFFAF4' }}><View style={styles.metricLabel}><TrendingUp color={colors.terracotta} size={22} /><Text style={styles.cardTitle}>KPI Analytics</Text></View><Text style={styles.smallCopy}>Messenger and marketing metrics are planned. Researcher testing will be labeled separately from real customer outcomes. No sample result is presented as real data.</Text></Card><View style={styles.twoColumns}>{metrics.slice(0, 4).map(([label, value, note]) => <Card key={label} style={styles.analyticsCard}><Label>{label}</Label><Text style={styles.analyticsValue}>{value}</Text><Text style={styles.summaryLabel}>{note}</Text></Card>)}</View><Card><Label>Follow-Up Response Rate</Label><Text style={styles.analyticsValue}>{metrics[4][1]}</Text><Text style={styles.smallCopy}>{metrics[4][2]}</Text></Card><Card><View style={styles.metricLabel}><UtensilsCrossed color={colors.terracotta} size={22} /><Text style={styles.cardTitle}>Menu-Item Order Performance</Text></View><Text style={styles.smallCopy}>Completed order quantity and recorded sales come from saved order records. They do not establish Messenger attribution.</Text></Card></DataScreen>;
 }
 
 const styles = StyleSheet.create({
